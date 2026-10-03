@@ -1,0 +1,23 @@
+# Local development database. Production uses a managed Postgres.
+# The schema needs `btree_gist` and `pgcrypto`, both in contrib, so the stock image is fine.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: madhaus-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: madhaus
+      POSTGRES_PASSWORD: madhaus_dev_only
+      POSTGRES_DB: madhaus
+    ports:
+      - "5433:5432"
+    volumes:
+      - madhaus_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U madhaus -d madhaus"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  madhaus_pgdata:

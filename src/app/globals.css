@@ -1,26 +1,357 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ==========================================================================
+   MadHaus design system
+   --------------------------------------------------------------------------
+   The site is dark-first because the venue is a night venue: it opens at 17:00
+   and closes at 03:00, so floodlit charcoal is the honest ground colour and
+   warm ivory is the café's contrast, not a light "mode".
+
+   There is therefore no prefers-color-scheme switch. Sections declare their own
+   surface with data-surface="dark" | "ivory" | "lime", and every token that
+   matters is redefined per surface so a component can be dropped into either
+   without knowing where it is.
+
+   The palette here is the BRIEF'S SUGGESTED DIRECTION, not sampled from brand
+   assets -- see docs/VERIFIED-FACTS.md. It is defined once, here, and mirrored
+   into Sanity's designSettings so it can be repointed at the real brand palette
+   without touching a component.
+   ========================================================================== */
+
+@theme {
+  /* --- Raw palette ------------------------------------------------------- */
+  --color-charcoal: #101010;
+  --color-charcoal-raised: #181818;
+  --color-charcoal-line: #2a2a2a;
+  --color-ivory: #f4f0e8;
+  --color-ivory-raised: #ffffff;
+  --color-ivory-line: #ddd6c8;
+  --color-lime: #d5ff3f;
+  --color-lime-deep: #b4e01f;
+  --color-orange: #ff6534;
+  --color-orange-deep: #e84d1c;
+
+  /* Neutral ramp for secondary information, tuned to sit on charcoal. */
+  --color-grey-400: #8a8a85;
+  --color-grey-300: #a8a8a2;
+  --color-grey-200: #c9c9c3;
+
+  /* Status colours. Always paired with an icon and a text label -- never the
+     only signal, so colour-blind users and screen readers lose nothing. */
+  --color-positive: #6ee7a5;
+  --color-pending: #ffc95c;
+  --color-negative: #ff7a6b;
+
+  /* --- Type -------------------------------------------------------------- */
+  --font-display: var(--font-archivo), "Arial Narrow", system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+
+  /* Fluid display scale. Headlines are meant to be oversized; these clamp so a
+     320px phone never overflows and a 1600px desktop still feels loud. */
+  --text-hero: clamp(2.75rem, 11vw, 9.5rem);
+  --text-hero--line-height: 0.86;
+  --text-hero--letter-spacing: -0.03em;
+
+  --text-display: clamp(2.25rem, 7vw, 5.5rem);
+  --text-display--line-height: 0.9;
+  --text-display--letter-spacing: -0.025em;
+
+  --text-headline: clamp(1.75rem, 4.2vw, 3.25rem);
+  --text-headline--line-height: 0.95;
+  --text-headline--letter-spacing: -0.02em;
+
+  --text-title: clamp(1.25rem, 2.2vw, 1.75rem);
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.01em;
+
+  --text-lead: clamp(1.0625rem, 1.5vw, 1.3125rem);
+  --text-lead--line-height: 1.5;
+
+  /* Small caps labels used for numbered sections and eyebrows. */
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.18em;
+
+  /* --- Layout ------------------------------------------------------------ */
+  --spacing-gutter: 1rem;
+  --container-content: 68rem;
+  --container-wide: 90rem;
+
+  /* --- Motion ------------------------------------------------------------ */
+  /* One easing for entrances, one for exits. Restrained on purpose: motion
+     supports the layout here, it does not perform. */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* ==========================================================================
+   Surfaces
+   Each surface remaps the semantic tokens. A card, a button or a body
+   paragraph reads --surface-fg / --surface-bg and is correct in any section.
+   ========================================================================== */
+
+:root,
+[data-surface="dark"] {
+  --surface-bg: var(--color-charcoal);
+  --surface-raised: var(--color-charcoal-raised);
+  --surface-fg: var(--color-ivory);
+  --surface-muted: var(--color-grey-300);
+  --surface-line: var(--color-charcoal-line);
+  --surface-accent: var(--color-lime);
+  --surface-accent-fg: var(--color-charcoal);
+  --surface-focus: var(--color-lime);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+[data-surface="ivory"] {
+  --surface-bg: var(--color-ivory);
+  --surface-raised: var(--color-ivory-raised);
+  --surface-fg: var(--color-charcoal);
+  /* Darker than the dark-surface muted so contrast on ivory stays >= 4.5:1. */
+  --surface-muted: #5f5c55;
+  --surface-line: var(--color-ivory-line);
+  --surface-accent: var(--color-orange);
+  --surface-accent-fg: var(--color-ivory-raised);
+  --surface-focus: var(--color-orange-deep);
+}
+
+[data-surface="lime"] {
+  --surface-bg: var(--color-lime);
+  --surface-raised: #e4ff7a;
+  --surface-fg: var(--color-charcoal);
+  --surface-muted: #3d4a12;
+  --surface-line: #a9cc2f;
+  --surface-accent: var(--color-charcoal);
+  --surface-accent-fg: var(--color-lime);
+  --surface-focus: var(--color-charcoal);
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+@layer base {
+  * {
+    /* Focus rings inherit the surface, so they stay visible on lime and ivory
+       as well as charcoal. */
+    outline-color: var(--surface-focus);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Native scrolling is preserved throughout: no scroll hijacking anywhere. */
+    scroll-behavior: smooth;
+    /* Sticky headings and in-page anchors clear the fixed header. */
+    scroll-padding-top: 5.5rem;
+  }
+
+  body {
+    background: var(--color-charcoal);
+    color: var(--color-ivory);
+    font-family: var(--font-sans);
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Keyboard focus must be obvious. Two-tone so it reads on any surface. */
+  :focus-visible {
+    outline: 3px solid var(--surface-focus);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  /* Headings are display type by default; body copy opts back into sans. */
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-stretch: 84%;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+
+  h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 650;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  /* Booking references, prices in tables, times: tabular so columns align. */
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  /* Any table of operational data reads better with tabular figures. */
+  table {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background: var(--color-lime);
+    color: var(--color-charcoal);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ==========================================================================
+   Utilities
+   ========================================================================== */
+
+@utility surface {
+  background: var(--surface-bg);
+  color: var(--surface-fg);
+}
+
+/* The page's standard horizontal rhythm: a 16px gutter on phones, widening to
+   a comfortable margin, with the content column capped. */
+@utility shell {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: var(--spacing-gutter);
+  max-width: var(--container-wide);
+  @variant sm {
+    padding-inline: 2rem;
+  }
+  @variant lg {
+    padding-inline: 3.5rem;
+  }
+}
+
+@utility shell-content {
+  width: 100%;
+  margin-inline: auto;
+  max-width: var(--container-content);
+}
+
+/* Visible to screen readers, invisible on screen. Used for section landmarks
+   and for the live region that announces availability changes. */
+@utility sr-only-focusable {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  &:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+}
+
+/* A hairline that reads as deliberate structure rather than a default border. */
+@utility rule {
+  border-color: var(--surface-line);
+}
+
+/* Fine diagonal hatching, used sparingly behind numbered section markers and
+   on empty states. Drawn in CSS so it costs no request and no layout shift. */
+@utility hatch {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--surface-fg) 9%, transparent) 0 1px,
+    transparent 1px 7px
+  );
+}
+
+/* A very low-contrast grain over photography, to keep large images from
+   looking flat without touching the asset itself. */
+@utility grain {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.35;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+}
+
+/* ==========================================================================
+   Motion
+   Entrances are a single, short, translate-and-fade. They are driven by a
+   data attribute an IntersectionObserver flips, so nothing depends on JS to be
+   readable: without JS the element is simply already visible.
+   ========================================================================== */
+
+@layer base {
+  [data-reveal] {
+    opacity: 0;
+    transform: translateY(1.25rem);
+    transition:
+      opacity 0.7s var(--ease-out-quint),
+      transform 0.7s var(--ease-out-quint);
+  }
+
+  [data-reveal][data-revealed="true"] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Staggering within a group, capped so a long list never feels slow. */
+  [data-reveal-delay="1"] { transition-delay: 60ms; }
+  [data-reveal-delay="2"] { transition-delay: 120ms; }
+  [data-reveal-delay="3"] { transition-delay: 180ms; }
+  [data-reveal-delay="4"] { transition-delay: 240ms; }
+  [data-reveal-delay="5"] { transition-delay: 300ms; }
+
+  .marquee-track {
+    animation: marquee 38s linear infinite;
+  }
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+}
+
+/*
+  Reduced motion. Everything that moves stops; nothing that carries meaning
+  disappears. Revealed content is shown outright rather than left at opacity 0,
+  and the marquee holds still instead of scrolling.
+*/
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .marquee-track {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Print: the booking confirmation is something people print or save as PDF. */
+@media print {
+  [data-print-hide] {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
 }
