@@ -20,12 +20,23 @@ import { getSiteSettings } from "@/lib/content";
  * offer.
  */
 
-export async function generateStaticParams() {
-  // Only active sports get a route. Football is seeded inactive, so /arena/football is
-  // not generated until the venue confirms it exists.
-  const sports = await getPublicSports();
-  return sports.map((sport) => ({ sport: sport.slug }));
-}
+/*
+ * Rendered per request.
+ *
+ * This page shows tonight's remaining slots. Prerendered -- which is the default, and
+ * what it used to be -- those slots would be frozen at whatever was free when the site
+ * was last built and would then be served from the CDN for days, telling customers a
+ * court is open when it was booked last Tuesday. A stale availability claim is worse than
+ * no claim, and the section below promises a live one.
+ *
+ * The rest of the page is configuration that changes rarely, so the cost is a few cheap
+ * queries per view rather than a rebuild. `/book` is dynamic for the same reason.
+ *
+ * `generateStaticParams` was removed with this change: it only informs prerendering, so
+ * leaving it would imply a static route that no longer exists. A slug with no active
+ * sport still 404s, via the `notFound()` calls below.
+ */
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
