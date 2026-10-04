@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { MenuEditor } from "@/components/admin/menu-editor";
 import { requirePermission } from "@/lib/auth/permissions";
 import { listMenuCategories, listMenuItemsForAdmin } from "@/server/venue-config-service";
-import { isSanityConfigured } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Menu", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -16,10 +15,9 @@ export const dynamic = "force-dynamic";
 export default async function MenuAdminPage() {
   await requirePermission("menu.manage");
 
-  const [items, categories, sanityReady] = await Promise.all([
+  const [items, categories] = await Promise.all([
     listMenuItemsForAdmin(),
     listMenuCategories(),
-    Promise.resolve(isSanityConfigured()),
   ]);
 
   const soldOut = items.filter((item) => !item.isAvailable);
@@ -29,8 +27,7 @@ export default async function MenuAdminPage() {
       <header>
         <h1 className="text-headline">Menu</h1>
         <p className="mt-2 max-w-2xl text-sm text-grey-400">
-          Prices and what is on tonight. The price here is the price charged — the public
-          menu reads it from this list.
+          Your complete menu, from photos and descriptions to prices and availability.
         </p>
       </header>
 
@@ -43,17 +40,9 @@ export default async function MenuAdminPage() {
         </p>
       )}
 
-      {/*
-        Where the split sits. Worth stating, because an editor who changes the description
-        in Sanity and expects the price to follow will otherwise be confused.
-      */}
       <p className="border-l-4 border-lime bg-charcoal-raised p-4 text-sm text-grey-200">
-        <strong>Prices and availability live here.</strong>{" "}
-        {sanityReady
-          ? "Descriptions and photos live in the Studio, matched to each item by its slug."
-          : "Descriptions and photos will live in the Studio once Sanity is connected."}{" "}
-        That split is deliberate: the price on the website has to be the price the till
-        charges.
+        Manage names, details, photos and prices here. Drafts stay private; published items
+        appear on the website. Archive items to hide them while keeping your records.
       </p>
 
       <MenuEditor items={items} categories={categories} />

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { uploadMenuPhoto } from "@/server/menu-images";
+import { MENU_STATUSES, validateMenuPrice } from "@/lib/domain/menu";
 import { AuthorisationError, requirePermission } from "@/lib/auth/permissions";
 import {
   ConfigError,
@@ -164,13 +166,30 @@ export async function saveOpeningHoursAction(
 // --- Menu --------------------------------------------------------------------------------
 
 const menuSchema = z.object({
-  id: z.string().trim().optional(),
+  id: z.union([z.string().uuid(), z.literal("")]).optional(),
   name: z.string().trim().min(2, "Give the item a name.").max(120),
   category: z.string().trim().min(2, "Give the item a category.").max(60),
-  price: rupeeAmount,
-  isAvailable: z.union([z.literal("on"), z.literal("")]).optional(),
+  price: z.union([z.literal(""), rupeeAmount]).transform(value => value === "" ? null : value),
+  isAvailable: z.literal("on").optional(),
   sortOrder: z.coerce.number().int().min(0).max(999).default(0),
+  description: z.string().trim().max(1000).default(""),
+  dietaryTags: z.string().trim().max(500).default(""),
+  allergenNote: z.string().trim().max(1000).default(""),
+  imageAlt: z.string().trim().max(160).default(""),
+  removeImage: z.literal("on").optional(),
+  isFeatured: z.literal("on").optional(),
+  publicationStatus: z.enum(MENU_STATUSES).default("draft"),
 });
+
+const variantSchema = z.array(z.object({
+  id: z.union([z.string().uuid(), z.literal("")]).transform(value => value || undefined),
+  name: z.string().trim().min(1, "Give each size a name.").max(60),
+  price: rupeeAmount,
+})).max(20);
+
+function refreshMenu() {
+  for (const path of ["/admin/menu", "/menu", "/cafe", "/"]) revalidatePath(path);
+}
 
 export async function saveMenuItemAction(
   _previous: ConfigState,
@@ -179,23 +198,35 @@ export async function saveMenuItemAction(
   try {
     const session = await requirePermission("menu.manage");
     const parsed = menuSchema.safeParse(Object.fromEntries(formData));
-    if (!parsed.success) {
-      return { error: parsed.error.issues[0]?.message ?? "Check the form." };
+    if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check the form." };
+    const input = parsed.data;
+    validateMenuPrice(input.price, input.publicationStatus);
+    const names = formData.getAll("variantName");
+    const prices = formData.getAll("variantPrice");
+    const ids = formData.getAll("variantId");
+    const variants = variantSchema.safeParse(names.map((name,index) => ({
+      name, price: prices[index], id: ids[index] ?? "",
+    })));
+    if (!variants.success) return { error: variants.error.issues[0]?.message ?? "Check the sizes." };
+    const file = formData.get("photo");
+    if (input.removeImage && file instanceof File && file.size) {
+      return { error: "Choose either a replacement photo or Remove photo." };
     }
-
+    const image = file instanceof File && file.size
+      ? await uploadMenuPhoto(file, input.imageAlt)
+      : input.removeImage ? null : undefined;
     await saveMenuItem({
-      id: parsed.data.id || null,
-      name: parsed.data.name,
-      category: parsed.data.category,
-      basePriceMinor: parsed.data.price,
-      isAvailable: parsed.data.isAvailable === "on",
-      sortOrder: parsed.data.sortOrder,
-      staffId: session.staffId,
+      id: input.id || null, name: input.name, category: input.category,
+      basePriceMinor: input.price, isAvailable: input.isAvailable === "on",
+      sortOrder: input.sortOrder, staffId: session.staffId,
+      description: input.description, dietaryTags: [...new Set(input.dietaryTags.split(",").map(tag => tag.trim()).filter(Boolean))],
+      allergenNote: input.allergenNote, image, imageAlt: input.imageAlt,
+      isFeatured: input.isFeatured === "on", publicationStatus: input.publicationStatus,
+      variants: variants.data.map(v => ({ id: v.id, name: v.name, priceMinor: v.price })),
     });
-
-    revalidatePath("/admin/menu");
-    revalidatePath("/menu");
-    return { ok: true, message: parsed.data.id ? "Item updated." : "Item added to the menu." };
+    refreshMenu();
+    return { ok: true, message: input.publicationStatus === "published"
+      ? "Saved and published to the menu." : `Saved as ${input.publicationStatus}.` };
   } catch (error) {
     return toState(error);
   }
@@ -216,8 +247,7 @@ export async function toggleMenuAvailabilityAction(
       staffId: session.staffId,
     });
 
-    revalidatePath("/admin/menu");
-    revalidatePath("/menu");
+    refreshMenu();
     return {
       ok: true,
       message: isAvailable ? `${name} is back on.` : `${name} marked sold out.`,
@@ -234,9 +264,8 @@ export async function deleteMenuItemAction(
   try {
     const session = await requirePermission("menu.manage");
     await deleteMenuItem(String(formData.get("id") ?? ""), session.staffId);
-    revalidatePath("/admin/menu");
-    revalidatePath("/menu");
-    return { ok: true, message: "Item removed." };
+    refreshMenu();
+    return { ok: true, message: "Item archived. It is hidden from the public menu and kept in your records." };
   } catch (error) {
     return toState(error);
   }

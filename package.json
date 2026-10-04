@@ -16,6 +16,7 @@
     "db:reset": "tsx scripts/migrate.ts --reset",
     "db:seed": "tsx scripts/seed.ts",
     "sanity:seed": "tsx scripts/seed-sanity.ts",
+    "menu:import": "tsx scripts/import-sanity-menu.ts",
     "db:studio": "drizzle-kit studio",
     "db:check": "tsx scripts/schema-drift.ts",
     "db:verify": "tsx scripts/db-check.ts",

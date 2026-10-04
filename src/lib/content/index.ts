@@ -129,57 +129,6 @@ export async function getSportEditorial(): Promise<Map<string, SportEditorial>> 
   );
 }
 
-/**
- * The CMS half of a menu item, keyed by slug.
- *
- * Deliberately excludes price and availability: those come from the database, because the
- * price on the website has to be the price the till charges.
- *
- * Dietary tags and allergen notes come from here because they are the kitchen's words, but
- * they are only ever shown when the kitchen has actually written them — an empty array
- * means "we have not said", not "none".
- */
-export interface MenuEditorial {
-  description: string | null;
-  dietaryTags: string[];
-  allergenNote: string | null;
-  isFeatured: boolean;
-  image: ImageRef | null;
-}
-
-export async function getMenuEditorial(): Promise<Map<string, MenuEditorial>> {
-  if (!isSanityConfigured()) return new Map();
-
-  const { sanityFetch, imageRef } = await import("@/lib/sanity/client");
-  const docs = await sanityFetch<Array<Record<string, unknown>>>({
-    query: `*[_type == "menuItem" && defined(slug.current)]{
-      "slug": slug.current,
-      description, dietaryTags, allergenNote, isFeatured,
-      image{..., asset->{url, metadata{lqip, dimensions}}}
-    }`,
-    tags: ["menuItem"],
-  });
-
-  return new Map(
-    (docs ?? []).map((doc) => [
-      String(doc.slug),
-      {
-        description:
-          typeof doc.description === "string" && doc.description.trim() !== ""
-            ? doc.description
-            : null,
-        dietaryTags: Array.isArray(doc.dietaryTags) ? (doc.dietaryTags as string[]) : [],
-        allergenNote:
-          typeof doc.allergenNote === "string" && doc.allergenNote.trim() !== ""
-            ? doc.allergenNote
-            : null,
-        isFeatured: doc.isFeatured === true,
-        image: imageRef(doc.image),
-      },
-    ]),
-  );
-}
-
 /** FAQs, in the order the venue set. */
 export async function getFaqs(): Promise<FaqItem[]> {
   if (!isSanityConfigured()) return SAMPLE_FAQS;

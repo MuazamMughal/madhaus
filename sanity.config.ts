@@ -26,7 +26,10 @@ export default defineConfig({
     ...(process.env.NODE_ENV !== "production" ? [visionTool()] : []),
   ],
 
-  schema: { types: schemaTypes },
+  schema: {
+    types: schemaTypes,
+    templates: (templates) => templates.filter(template => !["menuItem", "menuCategory"].includes(template.schemaType)),
+  },
 
   document: {
     actions: (actions, context) =>

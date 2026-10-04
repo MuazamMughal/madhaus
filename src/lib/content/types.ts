@@ -66,6 +66,7 @@ export interface SportSummary {
 }
 
 export interface MenuItemContent {
+  variants?: Array<{ name: string; priceLabel: string }>;
   slug: string;
   name: string;
   description: string | null;

@@ -4,15 +4,15 @@ import { defineField, defineType } from "sanity";
  * Catalogue documents: menu, events, offers, gallery, testimonials, FAQs.
  *
  * The recurring theme is that Sanity owns presentation and the database owns anything
- * transactional. A menu item's picture and description live here; its price and whether
- * it is in stock live in Postgres, because the café charges from the database and a price
- * that only exists in the CMS would be a price nobody honours.
+ * transactional. Menu item/category schemas are now read-only legacy import sources.
+ * All menu fields are owned by Admin/Postgres; Sanity still stores uploaded image assets.
  */
 
 export const menuCategory = defineType({
   name: "menuCategory",
-  title: "Menu category",
+  title: "Legacy menu category (read-only)",
   type: "document",
+  readOnly: true,
   fields: [
     defineField({ name: "title", type: "string", validation: (rule) => rule.required() }),
     defineField({
@@ -35,8 +35,9 @@ export const menuCategory = defineType({
 
 export const menuItem = defineType({
   name: "menuItem",
-  title: "Menu item",
+  title: "Legacy menu item (read-only)",
   type: "document",
+  readOnly: true,
   groups: [
     { name: "content", title: "Content", default: true },
     { name: "dietary", title: "Dietary & allergens" },

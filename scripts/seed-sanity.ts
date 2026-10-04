@@ -3,7 +3,6 @@ import "./load-env";
 import {
   SAMPLE_FAQS,
   SAMPLE_HERO,
-  SAMPLE_MENU_ITEMS,
   SAMPLE_SITE_SETTINGS,
 } from "@/lib/content/sample";
 
@@ -138,29 +137,6 @@ const sportPages: SanityDocument[] = Object.values({
   },
 });
 
-const categories = ["Mains", "Sides", "Coffee", "Starters"];
-const menuCategoryDocs: SanityDocument[] = categories.map((title, index) => ({
-  _id: `menuCategory-${title.toLowerCase()}`,
-  _type: "menuCategory",
-  title,
-  slug: slug(title.toLowerCase()),
-  sortOrder: index,
-}));
-
-const menuItemDocs: SanityDocument[] = SAMPLE_MENU_ITEMS.map((item) => {
-  const category = item.category.toLowerCase();
-  return {
-    _id: `menuItem-${item.slug}`,
-    _type: "menuItem",
-    title: item.name,
-    slug: slug(item.slug),
-    category: { _type: "reference", _ref: `menuCategory-${category}` },
-    description: item.description,
-    isFeatured: item.isFeatured,
-    dietaryTags: [],
-  };
-});
-
 const docs: SanityDocument[] = [
   siteSettings,
   designSettings,
@@ -186,8 +162,6 @@ const docs: SanityDocument[] = [
     heading: "Come by or get in touch",
     lead: "Find MadHaus in Sahiwal. For court availability, send a booking request and the team will follow up.",
   },
-  ...menuCategoryDocs,
-  ...menuItemDocs,
   ...SAMPLE_FAQS.map((item, index) => ({
     _id: `faq-${index + 1}`,
     _type: "faq",

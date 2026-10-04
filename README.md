@@ -117,7 +117,7 @@ Every row below is a page in `/admin`. No SQL, no deploy.
 | **Payments** | Verifying JazzCash transaction IDs | Confirms the booking |
 | **Rates** | Court prices, peak bands, which days a rate covers | New bookings only |
 | **Hours** | Opening and closing times per day, closing a day entirely | The booking page |
-| **Menu** | Prices, categories, sold-out | The public menu |
+| **Menu** | Details, photos, prices, sizes, publication, featured placement, sold-out | The public menu |
 | **Café** | Table requests | Immediately |
 | **Enquiries** | Contact-form messages | — |
 | **Reports** | Collected vs. owed, occupancy, outcomes | — |
@@ -130,19 +130,23 @@ Two guarantees worth knowing:
 - **Shortening a day does not cancel anything.** Bookings outside the new hours stay in the
   diary and still show on the dashboard; staff move them deliberately.
 
-Words and pictures live in `/studio`. Prices and availability live in `/admin`, because the
-price on the website has to be the price the till charges.
+Website editorial content lives in `/studio`. Complete menu items, including descriptions,
+photos, prices and availability, are managed in `/admin/menu`. Sanity stores uploaded photo
+files; PostgreSQL stores their references and all menu fields.
 
 **Still needs a developer:** adding staff accounts, creating discount codes, recording
 refunds.
 
 ---
 
+Menu ownership, the staff workflow and deployment/import steps are documented in
+[`docs/MENU-MANAGEMENT.md`](docs/MENU-MANAGEMENT.md).
+
 ## How it fits together
 
 ```
-Sanity  ──▶  words, pictures, editorial pages, menu descriptions, policies
-Postgres ─▶  bookings, availability, customers, payments, prices, hours, staff, audit
+Sanity  ──▶  website editorial content and image asset storage
+Postgres ─▶  complete menu records, bookings, availability, customers, payments, prices, hours, staff, audit
 ```
 
 Sanity is **not** the booking database, and no customer's personal data ever enters a
@@ -200,6 +204,7 @@ Two things are **never** prerendered, and the distinction matters:
 | | Why |
 |---|---|
 | `/book`, `/booking/[reference]`, `/account`, all of `/admin` | Per-visitor or live by definition |
+| `/`, `/menu`, `/cafe` | Read live menu publication, prices and availability at request time |
 | `/arena/[sport]` | Shows tonight's remaining slots. Prerendered, those would freeze at build time and the CDN would keep serving them for days — telling a customer a court is free that was booked last week |
 
 A stale availability claim is worse than no claim, so any page that shows one is dynamic.

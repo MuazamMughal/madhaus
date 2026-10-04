@@ -149,8 +149,8 @@ in [`ASSETS.md`](ASSETS.md). The ones that block hardest:
   as indicative while `pricing.isSample` is true.
 - **Street address, phone, WhatsApp number.** Only the city is confirmed. The site shows an
   honest gap rather than a plausible invented address.
-- **Menu, with prices.** And **allergen information**, which is a safety matter — none is
-  shown, and the menu page says to ask the team.
+- **Menu, with prices and kitchen-confirmed allergen information.** Manage these in
+  `/admin/menu`; supplied notes are displayed and customers are directed to ask the team.
 - **Legal review of `/privacy`, `/terms`, `/cancellation-policy`.** All three are drafts
   and say so on the page until `reviewedByBusiness` is set in the CMS.
 - **Whether football is actually offered.** Neither public profile mentions it. It is built
@@ -262,8 +262,9 @@ The endpoint then:
 1. **Verifies the signature** before acting on anything. A delivery with a bad signature,
    or one more than five minutes old, is refused — otherwise the URL is a public button
    anyone can press to make the site purge its cache.
-2. **Expires only the affected tags**, plus anything that embeds them. Publishing one menu
-   item does not evict the whole site.
+2. **Expires only the affected tags**, plus anything that embeds them. Publishing a sport
+   description does not evict unrelated editorial content. Menu updates now run through
+   Admin and PostgreSQL; see [MENU-MANAGEMENT.md](MENU-MANAGEMENT.md).
 3. **Expires immediately** (`{ expire: 0 }`) rather than stale-while-revalidate. An editor
    who presses Publish and reloads should see their change, not the previous version.
 

@@ -265,7 +265,6 @@ async function main(): Promise<void> {
     // SAMPLE items and SAMPLE prices, so the menu UI and the café order maths can be
     // exercised. No dietary tags and no allergen notes: getting either wrong is a real
     // harm, so they stay empty until the kitchen supplies them.
-    await client.query("DELETE FROM menu_items WHERE slug LIKE 'sample-%'");
     const menuRows: Array<[string, string, string, number, boolean]> = [
       ["sample-house-burger", "SAMPLE — House Burger", "Mains", rupees(950), true],
       ["sample-club-sandwich", "SAMPLE — Club Sandwich", "Mains", rupees(750), true],
@@ -276,12 +275,14 @@ async function main(): Promise<void> {
     ];
     for (const [index, [slug, name, category, price, available]] of menuRows.entries()) {
       const { rows } = await client.query(
-        `INSERT INTO menu_items (slug, name, category, base_price_minor, is_available, sort_order)
-         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-        [slug, name, category, price, available, index],
+        `INSERT INTO menu_items (slug, name, category, base_price_minor, is_available, sort_order,
+          publication_status, description, is_featured)
+         VALUES ($1,$2,$3,$4,$5,$6,'published','Placeholder item. Replace with the venue''s real menu before launch.',$7)
+         ON CONFLICT (slug) DO NOTHING RETURNING id`,
+        [slug, name, category, price, available, index, index < 3],
       );
       // A couple of variants, to prove variant pricing works.
-      if (category === "Coffee") {
+      if (category === "Coffee" && rows.length > 0) {
         await client.query(
           `INSERT INTO menu_item_variants (menu_item_id, name, price_delta_minor, sort_order)
            VALUES ($1,'Regular',0,0), ($1,'Large',$2,1)`,

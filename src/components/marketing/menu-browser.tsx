@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useState } from "react";
 import type { MenuItemContent } from "@/lib/content/types";
 import { cn } from "@/lib/utils/cn";
@@ -121,6 +122,8 @@ export function MenuBrowser({
                       !item.isAvailable && "opacity-60",
                     )}
                   >
+                    {item.image && <Image src={item.image.url} alt={item.image.alt} width={120} height={90}
+                      className="h-24 w-28 shrink-0 object-cover" />}
                     <div className="min-w-0 flex-1">
                       <h3 className="text-lg font-semibold">
                         {item.name}
@@ -134,6 +137,10 @@ export function MenuBrowser({
                       {item.description && (
                         <p className="mt-1 text-sm text-[var(--surface-muted)]">{item.description}</p>
                       )}
+                      {!!item.variants?.length && <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                        {item.variants.map(variant => <li key={variant.name}>{variant.name}: {variant.priceLabel}</li>)}
+                      </ul>}
+                      {item.allergenNote && <p className="mt-2 text-xs text-[var(--surface-muted)]">Allergens: {item.allergenNote}</p>}
                       {item.dietaryTags.length > 0 && (
                         <ul className="mt-2 flex flex-wrap gap-2">
                           {item.dietaryTags.map((tag) => (

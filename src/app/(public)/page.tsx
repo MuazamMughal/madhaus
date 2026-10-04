@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import Link from "next/link";
 import { Hero } from "@/components/marketing/hero";
 import { Marquee } from "@/components/marketing/marquee";
@@ -29,13 +30,15 @@ import {
  * that renders a placeholder event, a made-up offer or an invented review.
  */
 export default async function HomePage() {
+  // Menu availability and publication come from live operational records.
+  await connection();
   const [settings, hero, sports, hoursLabel, hours, featured, flags] = await Promise.all([
     getSiteSettings(),
     getHero(),
     getPublicSports(),
     getHoursLabel(),
     getOpeningHoursTable(),
-    getMenuItems({ limit: 3 }),
+    getMenuItems({ featuredOnly: true, limit: 3 }),
     getFeatureFlags(),
   ]);
 

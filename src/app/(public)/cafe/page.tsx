@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import type { Metadata } from "next";
 import { ButtonLink } from "@/components/ui/button";
 import { MediaPanel } from "@/components/ui/media-panel";
@@ -27,9 +28,11 @@ export async function generateMetadata(): Promise<Metadata> {
  * worded as a request unless instant confirmation is genuinely possible.
  */
 export default async function CafePage() {
+  // Menu availability and publication come from live operational records.
+  await connection();
   const [flags, featured, settings] = await Promise.all([
     getFeatureFlags(),
-    getMenuItems({ limit: 6 }),
+    getMenuItems({ featuredOnly: true, limit: 6 }),
     getSiteSettings(),
   ]);
 

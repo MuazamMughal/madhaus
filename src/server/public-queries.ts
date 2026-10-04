@@ -2,7 +2,7 @@ import { pool } from "@/lib/db/client";
 import { formatPkr } from "@/lib/domain/money";
 import { formatLocalTime12h, parseLocalTime } from "@/lib/domain/time";
 import { SAMPLE_SPORTS } from "@/lib/content/sample";
-import { getMenuEditorial, getSportEditorial } from "@/lib/content";
+import { getSportEditorial } from "@/lib/content";
 import type { MenuItemContent, SportSummary } from "@/lib/content/types";
 
 /**
@@ -143,45 +143,30 @@ export async function getMenuItems(options: { featuredOnly?: boolean; limit?: nu
   MenuItemContent[]
 > {
   const { rows } = await pool().query<{
-    slug: string;
-    name: string;
-    category: string;
-    base_price_minor: number;
-    is_available: boolean;
-    variant_count: number;
+    slug: string; name: string; category: string; base_price_minor: number;
+    is_available: boolean; description: string | null; dietary_tags: string[];
+    allergen_note: string | null; image: MenuItemContent["image"]; is_featured: boolean;
+    variant_count: number; minimum_price: number; variants: Array<{ name: string; priceMinor: number }>;
   }>(
-    `SELECT m.slug, m.name, m.category, m.base_price_minor, m.is_available,
-            (SELECT count(*) FROM menu_item_variants v WHERE v.menu_item_id = m.id) AS variant_count
-       FROM menu_items m
-      ORDER BY m.sort_order, m.name
-      ${options.limit ? "LIMIT " + Number(options.limit) : ""}`,
+    `SELECT m.*,
+       COALESCE((SELECT jsonb_agg(jsonb_build_object('name', v.name, 'priceMinor', m.base_price_minor + v.price_delta_minor) ORDER BY v.sort_order)
+         FROM menu_item_variants v WHERE v.menu_item_id=m.id AND v.is_available), '[]'::jsonb) AS variants,
+       (SELECT count(*) FROM menu_item_variants v WHERE v.menu_item_id=m.id AND v.is_available) AS variant_count,
+       COALESCE((SELECT min(m.base_price_minor + v.price_delta_minor)
+         FROM menu_item_variants v WHERE v.menu_item_id=m.id AND v.is_available), m.base_price_minor) AS minimum_price
+     FROM menu_items m
+     WHERE m.publication_status='published' AND m.base_price_minor IS NOT NULL
+       AND (NOT $1::boolean OR m.is_featured)
+     ORDER BY m.sort_order, m.name LIMIT $2`,
+    [options.featuredOnly ?? false, options.limit ?? null],
   );
-
-  // Descriptions, pictures and the kitchen's dietary wording come from the CMS; price and
-  // availability stay with the database, so the menu and the till cannot disagree.
-  const editorial = await getMenuEditorial();
-
-  return rows.map((row, index) => {
-    const cms = editorial.get(row.slug);
-
-    return {
-      slug: row.slug,
-      name: row.name,
-      description: cms?.description ?? null,
-      category: row.category,
-      priceLabel:
-        Number(row.variant_count) > 0
-          ? `From ${formatPkr(row.base_price_minor)}`
-          : formatPkr(row.base_price_minor),
-      // Only ever what the kitchen has actually written. An empty list means "we have not
-      // said", not "none" -- a wrong dietary or allergen claim is a real-world harm.
-      dietaryTags: cms?.dietaryTags ?? [],
-      allergenNote: cms?.allergenNote ?? null,
-      image: cms?.image ?? null,
-      isFeatured: cms?.isFeatured ?? index < 3,
-      isAvailable: row.is_available,
-    };
-  });
+  return rows.map(row => ({
+    slug: row.slug, name: row.name, description: row.description, category: row.category,
+    priceLabel: `${Number(row.variant_count) > 0 ? "From " : ""}${formatPkr(row.minimum_price)}`,
+    variants: row.variants.map(v => ({ name: v.name, priceLabel: formatPkr(v.priceMinor) })),
+    dietaryTags: row.dietary_tags, allergenNote: row.allergen_note,
+    image: row.image, isFeatured: row.is_featured, isAvailable: row.is_available,
+  }));
 }
 
 /** "Football and cricket", "a, b and c". */
@@ -193,7 +178,7 @@ function formatList(items: readonly string[]): string {
 /** Distinct menu categories, in the order the café wants them shown. */
 export async function getMenuCategories(): Promise<string[]> {
   const { rows } = await pool().query<{ category: string }>(
-    "SELECT category, min(sort_order) AS ord FROM menu_items GROUP BY category ORDER BY ord",
+    "SELECT category, min(sort_order) AS ord FROM menu_items WHERE publication_status='published' GROUP BY category ORDER BY ord",
   );
   return rows.map((row) => row.category);
 }

@@ -213,7 +213,7 @@ Ten pages at `/admin`, behind a sign-in, plus a walk-in booking form at
 | **Payments** | Verify JazzCash transaction IDs. View submitted screenshots |
 | **Rates** | Court prices, peak bands, days, priority. Shows unpriced gaps |
 | **Hours** | Opening and closing per day, or close a day entirely |
-| **Menu** | Prices, categories, one-click sold out |
+| **Menu** | Details, photos, prices, sizes, drafts/publishing, featured placement, one-click sold out |
 | **Café** | Table requests, and which café services are switched on |
 | **Enquiries** | Contact-form messages, with reply links |
 | **Reports** | Collected vs. owed, occupancy by court, outcomes, café totals |
@@ -251,15 +251,16 @@ Hiding a button is presentation, not authorisation.
 ## 8. Content management
 
 ```
-Sanity  ──▶  words, pictures, editorial pages, menu descriptions, policies
-Postgres ─▶  bookings, availability, customers, payments, prices, hours, staff, audit
+Sanity  ──▶  website editorial content and image asset storage
+Postgres ─▶  complete menu records, bookings, availability, customers, payments, prices, hours, staff, audit
 ```
 
 Sanity is **not** the booking database, and no customer's personal data ever enters a
-Sanity dataset. Where both describe the same thing — a menu item, an event, an offer — the
-database owns what is transactional (price, stock, capacity, discount) and Sanity owns how
-it reads. A price on screen always comes from the database, so the site and the till cannot
-disagree.
+Sanity dataset. Complete menu records are managed in Admin and stored in PostgreSQL.
+Menu photo files use Sanity asset storage; their references and alt text live in PostgreSQL.
+Legacy Studio menu records are read-only import sources. For the transition and staff
+workflow, see [MENU-MANAGEMENT.md](MENU-MANAGEMENT.md). Events and offers still separate
+editorial content from transactional capacity and discount rules.
 
 16 document types, with required alt text on every image, hotspot cropping, singletons that
 cannot be duplicated, and a constrained editor rather than a free-form page builder.
@@ -312,9 +313,11 @@ for a human rather than retried forever.
   social embeds. Most pages ship no client JavaScript beyond the header.
 
 **What is cached, and what deliberately is not.** Pages showing configuration — sports,
-prices, hours, menu, editorial — are prerendered and served from the CDN, and a Sanity
+sports, hours and editorial — are generally prerendered and served from the CDN, and a Sanity
 publish revalidates them by tag without a rebuild. Pages showing live or per-visitor state
 are rendered per request: `/book`, `/booking/[reference]`, `/account` and all of `/admin`.
+The homepage, `/menu` and `/cafe` also render at request time to reflect current menu
+publication, prices and availability.
 
 `/arena/[sport]` belongs in the second group for a reason worth recording. It shows
 tonight's remaining slots. Prerendered, those slots freeze at build time and the CDN keeps

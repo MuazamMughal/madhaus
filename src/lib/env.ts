@@ -48,8 +48,7 @@ const serverSchema = z.object({
   NEXT_PUBLIC_SANITY_API_VERSION: z.string().trim().default("2026-10-01"),
   SANITY_API_READ_TOKEN: optionalString,
   /**
-   * Write access, used only by `npm run seed:sanity`. Never read by the running
-   * application — a web request has no business writing to the CMS.
+   * Write access for the Sanity seeder and permission-checked Admin photo uploads.
    */
   SANITY_API_WRITE_TOKEN: optionalString,
   SANITY_REVALIDATE_SECRET: optionalString,

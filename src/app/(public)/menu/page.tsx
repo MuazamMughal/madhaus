@@ -1,3 +1,4 @@
+import { connection } from "next/server";
 import type { Metadata } from "next";
 import { MenuBrowser } from "@/components/marketing/menu-browser";
 import { PageHero } from "@/components/ui/page-hero";
@@ -22,6 +23,8 @@ export async function generateMetadata(): Promise<Metadata> {
  * filtering is instant with it on.
  */
 export default async function MenuPage() {
+  // Menu availability and publication come from live operational records.
+  await connection();
   const [items, categories, flags, settings] = await Promise.all([
     getMenuItems(),
     getMenuCategories(),
@@ -60,8 +63,7 @@ export default async function MenuPage() {
           <div className="mt-14 border-t border-[var(--surface-line)] pt-8">
             <h2 className="text-eyebrow font-display mb-3 uppercase">Allergies and dietary needs</h2>
             <p className="max-w-2xl text-sm text-[var(--surface-muted)]">
-              Allergen and dietary information has not been supplied for this menu yet, so none is
-              shown. Please speak to the team{settings.phone ? ` or call ${settings.phone}` : ""}{" "}
+              Allergen information is shown where the kitchen has supplied it. Please speak to the team{settings.phone ? ` or call ${settings.phone}` : ""}{" "}
               before ordering if you have an allergy or a dietary requirement.
             </p>
           </div>

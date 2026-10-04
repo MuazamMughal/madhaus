@@ -1,4 +1,5 @@
 import type { StructureResolver } from "sanity/structure";
+import { MenuManagement } from "./components/menu-management";
 import { SINGLETON_TYPES } from "./schemas";
 
 /**
@@ -46,11 +47,8 @@ export const structure: StructureResolver = (S) =>
             .items([
               singleton(S, "cafePage", "Café page"),
               S.listItem()
-                .title("Menu categories")
-                .child(S.documentTypeList("menuCategory").title("Menu categories")),
-              S.listItem()
-                .title("Menu items")
-                .child(S.documentTypeList("menuItem").title("Menu items")),
+                .title("Manage menu in Admin")
+                .child(S.component().title("Menu management").component(MenuManagement)),
             ]),
         ),
 
@@ -129,7 +127,9 @@ export const singletonActionsFilter = (input: {
   schemaType: string;
   actions: readonly unknown[];
 }) =>
-  SINGLETON_TYPES.has(input.schemaType)
+  ["menuItem", "menuCategory"].includes(input.schemaType)
+    ? []
+    : SINGLETON_TYPES.has(input.schemaType)
     ? input.actions.filter((action) => {
         const name = (action as { action?: string }).action;
         return name !== "unpublish" && name !== "delete" && name !== "duplicate";

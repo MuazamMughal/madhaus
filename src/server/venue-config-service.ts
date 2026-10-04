@@ -1,4 +1,5 @@
 import { pool, withTransaction } from "@/lib/db/client";
+import { validateMenuPrice, type MenuPhoto, type MenuStatus, type MenuVariant } from "@/lib/domain/menu";
 import { audit } from "./booking-service";
 import { assertRuleWindowSane } from "@/lib/domain/pricing";
 import { formatLocalTime12h, parseLocalTime } from "@/lib/domain/time";
@@ -444,61 +445,53 @@ export interface MenuItemRow {
   slug: string;
   name: string;
   category: string;
-  basePriceMinor: number;
+  basePriceMinor: number | null;
   isAvailable: boolean;
   isOrderable: boolean;
   sortOrder: number;
   variantCount: number;
+  description: string | null;
+  dietaryTags: string[];
+  allergenNote: string | null;
+  image: MenuPhoto | null;
+  isFeatured: boolean;
+  publicationStatus: MenuStatus;
+  variants: MenuVariant[];
 }
 
 export async function listMenuItemsForAdmin(): Promise<MenuItemRow[]> {
   const { rows } = await pool().query(
-    `SELECT m.id, m.slug, m.name, m.category, m.base_price_minor, m.is_available,
-            m.is_orderable, m.sort_order,
-            (SELECT count(*) FROM menu_item_variants v WHERE v.menu_item_id = m.id) AS variant_count
-       FROM menu_items m
-      ORDER BY m.category, m.sort_order, m.name`,
+    `SELECT m.*,
+       COALESCE((SELECT jsonb_agg(jsonb_build_object('id', v.id, 'name', v.name,
+         'priceMinor', m.base_price_minor + v.price_delta_minor) ORDER BY v.sort_order)
+         FROM menu_item_variants v WHERE v.menu_item_id = m.id), '[]'::jsonb) AS variants
+     FROM menu_items m ORDER BY m.category, m.sort_order, m.name`,
   );
   return rows.map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    category: row.category,
-    basePriceMinor: row.base_price_minor,
-    isAvailable: row.is_available,
-    isOrderable: row.is_orderable,
-    sortOrder: row.sort_order,
-    variantCount: Number(row.variant_count),
+    id: row.id, slug: row.slug, name: row.name, category: row.category,
+    basePriceMinor: row.base_price_minor, isAvailable: row.is_available,
+    isOrderable: row.is_orderable, sortOrder: row.sort_order,
+    variantCount: row.variants.length, variants: row.variants,
+    description: row.description, dietaryTags: row.dietary_tags,
+    allergenNote: row.allergen_note, image: row.image,
+    isFeatured: row.is_featured, publicationStatus: row.publication_status,
   }));
 }
 
-/**
- * Flip an item sold out, or back on.
- *
- * The single most frequent menu change in a kitchen, so it is one click rather than a
- * form. Kept separate from `saveMenuItem` for exactly that reason.
- */
 export async function setMenuItemAvailability(args: {
-  id: string;
-  isAvailable: boolean;
-  staffId: string;
+  id: string; isAvailable: boolean; staffId: string;
 }): Promise<{ name: string }> {
   return withTransaction(async (client) => {
     const { rows } = await client.query(
       "UPDATE menu_items SET is_available = $2 WHERE id = $1 RETURNING name",
       [args.id, args.isAvailable],
     );
-    if (rows.length === 0) throw new ConfigError("not_found", "That item no longer exists.");
-
+    if (!rows.length) throw new ConfigError("not_found", "That item no longer exists.");
     await audit(client, {
-      actorType: "staff",
-      actorId: args.staffId,
+      actorType: "staff", actorId: args.staffId,
       action: args.isAvailable ? "menu.back_on" : "menu.sold_out",
-      entityType: "menu_item",
-      entityId: args.id,
-      diff: { name: rows[0].name },
+      entityType: "menu_item", entityId: args.id, diff: { name: rows[0].name },
     });
-
     return { name: rows[0].name as string };
   });
 }
@@ -507,109 +500,114 @@ export interface SaveMenuItemInput {
   id?: string | null;
   name: string;
   category: string;
-  basePriceMinor: number;
+  basePriceMinor: number | null;
   isAvailable: boolean;
   sortOrder: number;
   staffId: string;
+  description?: string | null;
+  dietaryTags?: string[];
+  allergenNote?: string | null;
+  image?: MenuPhoto | null;
+  imageAlt?: string;
+  isFeatured?: boolean;
+  publicationStatus?: MenuStatus;
+  variants?: MenuVariant[];
 }
 
 export async function saveMenuItem(input: SaveMenuItemInput): Promise<{ id: string }> {
   const name = input.name.trim();
   const category = input.category.trim();
-
-  if (name.length < 2) throw new ConfigError("invalid", "Give the item a name.");
-  if (category.length < 2) throw new ConfigError("invalid", "Give the item a category.");
-  if (input.basePriceMinor < 0) throw new ConfigError("invalid", "A price cannot be negative.");
-
+  if (name.length < 2 || name.length > 120) throw new ConfigError("invalid", "Give the item a name of 2–120 characters.");
+  if (category.length < 2 || category.length > 60) throw new ConfigError("invalid", "Give the category a name of 2–60 characters.");
+  const status = input.publicationStatus ?? "published";
+  if (!["draft", "published", "archived"].includes(status)) throw new ConfigError("invalid", "Choose a valid publication status.");
+  try { validateMenuPrice(input.basePriceMinor, status); }
+  catch (error) { throw new ConfigError("invalid", error instanceof Error ? error.message : "Invalid price."); }
+  const variants = input.variants;
+  if (variants && variants.length > 20) throw new ConfigError("invalid", "Use at most 20 sizes or variants.");
+  for (const variant of variants ?? []) {
+    validateMenuPrice(variant.priceMinor, "published");
+    if (input.basePriceMinor === null || !variant.name.trim() || variant.name.length > 60) {
+      throw new ConfigError("invalid", "Each size needs a name and price, and the item needs a base price.");
+    }
+  }
+  if (variants && new Set(variants.map(v => v.name.trim().toLowerCase())).size !== variants.length) {
+    throw new ConfigError("invalid", "Use a different name for each size.");
+  }
   return withTransaction(async (client) => {
-    if (input.id) {
-      const { rows: before } = await client.query(
-        "SELECT name, base_price_minor FROM menu_items WHERE id = $1",
-        [input.id],
-      );
-      if (before.length === 0) throw new ConfigError("not_found", "That item no longer exists.");
-
-      await client.query(
-        `UPDATE menu_items
-            SET name = $2, category = $3, base_price_minor = $4, is_available = $5, sort_order = $6
-          WHERE id = $1`,
-        [input.id, name, category, input.basePriceMinor, input.isAvailable, input.sortOrder],
-      );
-
-      await audit(client, {
-        actorType: "staff",
-        actorId: input.staffId,
-        action: "menu.updated",
-        entityType: "menu_item",
-        entityId: input.id,
-        diff: {
-          name,
-          priceFrom: before[0].base_price_minor,
-          priceTo: input.basePriceMinor,
-        },
-      });
-
-      return { id: input.id };
+    const before = input.id
+      ? (await client.query("SELECT * FROM menu_items WHERE id = $1 FOR UPDATE", [input.id])).rows[0]
+      : null;
+    if (input.id && !before) throw new ConfigError("not_found", "That item no longer exists.");
+    const savedImage = input.image === undefined ? before?.image ?? null : input.image;
+    const image = savedImage ? { ...savedImage } : null;
+    if (image && input.imageAlt !== undefined) image.alt = input.imageAlt.trim();
+    if (image && (!image.alt || image.alt.length < 3 || image.alt.length > 160)) {
+      throw new ConfigError("invalid", "Describe the photo in 3–160 characters.");
     }
-
-    // The slug ties this row to its Sanity document, where the picture and description
-    // live. Derived from the name, with a suffix if that is already taken.
-    const base = slugify(name);
-    let slug = base;
-    for (let attempt = 2; attempt < 50; attempt += 1) {
-      const { rows: clash } = await client.query("SELECT 1 FROM menu_items WHERE slug = $1", [slug]);
-      if (clash.length === 0) break;
-      slug = `${base}-${attempt}`;
+    // Existing variants require a base price even when this item is saved as a draft.
+    if (input.basePriceMinor === null && variants === undefined && before) {
+      const existing = await client.query("SELECT 1 FROM menu_item_variants WHERE menu_item_id = $1 LIMIT 1", [before.id]);
+      if (existing.rowCount) throw new ConfigError("invalid", "Remove the sizes before clearing the base price.");
     }
-
-    const { rows } = await client.query(
-      `INSERT INTO menu_items (slug, name, category, base_price_minor, is_available, sort_order)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [slug, name, category, input.basePriceMinor, input.isAvailable, input.sortOrder],
-    );
-
+    const fields = [name, category, input.basePriceMinor, input.isAvailable, input.sortOrder,
+      input.description === undefined ? before?.description ?? null : input.description?.trim() || null,
+      JSON.stringify(input.dietaryTags ?? before?.dietary_tags ?? []),
+      input.allergenNote === undefined ? before?.allergen_note ?? null : input.allergenNote?.trim() || null,
+      image ? JSON.stringify(image) : null, input.isFeatured ?? before?.is_featured ?? false, status];
+    let id = input.id;
+    if (id) {
+      await client.query(`UPDATE menu_items SET name=$1, category=$2, base_price_minor=$3,
+        is_available=$4, sort_order=$5, description=$6, dietary_tags=$7::jsonb,
+        allergen_note=$8, image=$9::jsonb, is_featured=$10, publication_status=$11, admin_managed=true WHERE id=$12`, [...fields,id]);
+    } else {
+      const base = slugify(name);
+      // Serialize slug allocation; concurrent identical names get distinct stable slugs.
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 1))", [base]);
+      let slug = base;
+      for (let suffix = 2; ; suffix++) {
+        if (!(await client.query("SELECT 1 FROM menu_items WHERE slug=$1", [slug])).rowCount) break;
+        slug = `${base}-${suffix}`;
+      }
+      const result = await client.query(`INSERT INTO menu_items
+        (name,category,base_price_minor,is_available,sort_order,description,dietary_tags,
+          allergen_note,image,is_featured,publication_status,slug,admin_managed)
+        VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,$12,true) RETURNING id`, [...fields,slug]);
+      id = result.rows[0].id as string;
+    }
+    if (variants !== undefined) {
+      const kept: string[] = [];
+      for (const [order,variant] of variants.entries()) {
+        const delta = variant.priceMinor - input.basePriceMinor!;
+        if (variant.id) {
+          const result = await client.query(`UPDATE menu_item_variants SET name=$1, price_delta_minor=$2,
+            sort_order=$3 WHERE id=$4 AND menu_item_id=$5 RETURNING id`,
+            [variant.name.trim(),delta,order,variant.id,id]);
+          if (!result.rowCount) throw new ConfigError("invalid", "That size does not belong to this item.");
+          kept.push(variant.id);
+        } else {
+          const result = await client.query(`INSERT INTO menu_item_variants (menu_item_id,name,price_delta_minor,sort_order)
+            VALUES ($1,$2,$3,$4) RETURNING id`, [id,variant.name.trim(),delta,order]);
+          kept.push(result.rows[0].id);
+        }
+      }
+      await client.query("DELETE FROM menu_item_variants WHERE menu_item_id=$1 AND NOT (id=ANY($2::uuid[]))",[id,kept]);
+    }
     await audit(client, {
-      actorType: "staff",
-      actorId: input.staffId,
-      action: "menu.created",
-      entityType: "menu_item",
-      entityId: rows[0].id,
-      diff: { name, slug, priceMinor: input.basePriceMinor },
+      actorType: "staff", actorId: input.staffId, action: before ? "menu.updated" : "menu.created",
+      entityType: "menu_item", entityId: id!,
+      diff: { before, after: { ...input, image } },
     });
-
-    return { id: rows[0].id as string };
+    return { id: id! };
   });
 }
 
+/** Archive rather than deleting a product linked to historical receipts. */
 export async function deleteMenuItem(id: string, staffId: string): Promise<void> {
   await withTransaction(async (client) => {
-    // An item that has been ordered is kept: café order lines snapshot the name and price,
-    // but the link back is still worth having. Hide it instead.
-    const { rows: ordered } = await client.query(
-      "SELECT count(*)::int AS n FROM cafe_order_items WHERE menu_item_id = $1",
-      [id],
-    );
-    if (ordered[0].n > 0) {
-      throw new ConfigError(
-        "in_use",
-        "That item has been ordered before, so it is kept for the records. Mark it sold out instead to take it off the menu.",
-      );
-    }
-
-    const { rows } = await client.query(
-      "DELETE FROM menu_items WHERE id = $1 RETURNING name",
-      [id],
-    );
-    if (rows.length === 0) throw new ConfigError("not_found", "That item no longer exists.");
-
-    await audit(client, {
-      actorType: "staff",
-      actorId: staffId,
-      action: "menu.deleted",
-      entityType: "menu_item",
-      entityId: id,
-      diff: { name: rows[0].name },
-    });
+    const result = await client.query("UPDATE menu_items SET publication_status='archived' WHERE id=$1 RETURNING name",[id]);
+    if (!result.rowCount) throw new ConfigError("not_found", "That item no longer exists.");
+    await audit(client,{actorType:"staff",actorId:staffId,action:"menu.archived",entityType:"menu_item",entityId:id,diff:{name:result.rows[0].name}});
   });
 }
 
