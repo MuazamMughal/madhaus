@@ -87,12 +87,12 @@ export const SAMPLE_SPORTS: Record<string, Omit<SportSummary, "fromPriceLabel">>
     blurb:
       "Tape ball under the lights. Bring a side, settle an argument, stay for the food.",
     courtNote:
-      "Played on the multipurpose court, which is shared with football — booking one takes the other off the board.",
+      "Played on the multipurpose court, which is shared with futsal — booking one takes the other off the board.",
     image: null,
   },
   football: {
     slug: "football",
-    name: "Football",
+    name: "Futsal",
     blurb: "Small-sided, fast, and floodlit. Best played late.",
     courtNote:
       "Played on the multipurpose court, which is shared with cricket — booking one takes the other off the board.",
@@ -205,9 +205,9 @@ export const SAMPLE_TESTIMONIALS: Testimonial[] = [];
 
 export const SAMPLE_FAQS: FaqItem[] = [
   {
-    question: "Do football and cricket use the same court?",
+    question: "Do futsal and cricket use the same court?",
     answer:
-      "Yes. There is one multipurpose court, so a football booking and a cricket booking cannot overlap — booking either one takes that time off the board for both. Padel has its own dedicated court and is unaffected.",
+      "Yes. There is one multipurpose court, so a futsal booking and a cricket booking cannot overlap — booking either one takes that time off the board for both. Padel has its own dedicated court and is unaffected.",
   },
   {
     question: "How late can we play?",

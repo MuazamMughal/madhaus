@@ -132,7 +132,7 @@ const sportPages: SanityDocument[] = Object.values({
   football: {
     _id: "sportPage-football",
     _type: "sportPage",
-    title: "Football",
+    title: "Futsal",
     slug: slug("football"),
     blurb: "Small-sided, fast, and floodlit. Best played late.",
   },
@@ -203,15 +203,21 @@ async function main() {
   const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET ?? "production";
   const token = process.env.SANITY_API_WRITE_TOKEN;
   const apply = process.argv.includes("--apply");
+  const futsalOnly = process.argv.includes("--futsal");
+  const selectedDocs = futsalOnly
+    ? docs.filter((doc) => doc._id === "sportPage-football")
+    : docs;
 
   if (!projectId) throw new Error("Set NEXT_PUBLIC_SANITY_PROJECT_ID in .env.local.");
   if (apply && !token) throw new Error("Set SANITY_API_WRITE_TOKEN to a Sanity token with dataset write access.");
 
-  console.log(`${apply ? "Seeding" : "Dry run:"} ${docs.length} Sanity documents into ${projectId}/${dataset}`);
-  console.log("Existing documents are preserved. This seeder does not delete or overwrite content.");
+  console.log(`${apply ? "Seeding" : "Dry run:"} ${selectedDocs.length} Sanity documents into ${projectId}/${dataset}`);
+  console.log(futsalOnly
+    ? "Futsal's title and blurb will be updated; existing images and other fields are preserved."
+    : "Existing documents are preserved. This seeder does not delete or overwrite content.");
   if (!apply) {
-    for (const doc of docs) console.log(`  ${doc._type}: ${doc._id}`);
-    console.log("Run npm run sanity:seed -- --apply to create missing documents.");
+    for (const doc of selectedDocs) console.log(`  ${doc._type}: ${doc._id}`);
+    console.log(`Run npm run sanity:seed -- --apply${futsalOnly ? " --futsal" : ""} to apply.`);
     return;
   }
 
@@ -224,7 +230,12 @@ async function main() {
   });
 
   const transaction = client.transaction();
-  for (const doc of docs) transaction.createIfNotExists(doc);
+  for (const doc of selectedDocs) {
+    transaction.createIfNotExists(doc);
+    if (futsalOnly) {
+      transaction.patch(doc._id, { set: { title: doc.title, blurb: doc.blurb } });
+    }
+  }
   const result = await transaction.commit();
   console.log(`Seed complete. Sanity transaction id: ${result.transactionId}`);
   console.log("Empty event, offer, gallery and testimonial lists were left empty; no real records or media were supplied.");

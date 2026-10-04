@@ -12,8 +12,7 @@
  *     placeholder banner and stays out of search results.
  *   - Nothing that would be a real-world claim is invented: no address, no phone number,
  *     no dietary or allergen information, no reviews.
- *   - Football is seeded INACTIVE. Neither of the venue's public profiles mentions
- *     football, so it does not appear publicly until someone confirms it exists.
+ *   - Futsal uses the existing football slug and shares the cricket court.
  *
  * Safe to re-run: every insert is keyed on a natural unique column and upserts.
  */
@@ -143,16 +142,15 @@ async function main(): Promise<void> {
       },
       {
         slug: "football",
-        name: "Football",
+        name: "Futsal",
         resource: SHARED_COURT,
         durations: [60, 90, 120],
         defaultDuration: 60,
         step: 30,
         minPlayers: null,
         maxPlayers: null,
-        // Neither public profile mentions football. Implemented in full, switched off
-        // until the venue confirms it. Flipping this one boolean publishes it.
-        active: false,
+        // Keep the existing identifier so reservations and prices retain their links.
+        active: true,
       },
     ];
     const sportIds = new Map<string, string>();
@@ -321,7 +319,7 @@ async function main(): Promise<void> {
 
     console.log("\nSeeded:");
     console.log("  2 physical resources (padel court, shared multipurpose court)");
-    console.log("  3 sports — padel + cricket active, football INACTIVE pending confirmation");
+    console.log("  3 sports — padel, cricket and futsal active; cricket and futsal share a court");
     console.log("  opening hours 17:00–03:00 every day (verified from the venue's Instagram bio)");
     console.log(`  ${priceRows.length} SAMPLE pricing rules, ${menuRows.length} SAMPLE menu items`);
     console.log("\nBooking flow: every online booking is a REQUEST that staff approve.");

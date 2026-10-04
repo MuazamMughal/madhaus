@@ -35,13 +35,13 @@ Nothing here has been re-checked since; treat it as a snapshot of that date.
 3. **Delivery is advertised on Instagram but delivery operations are not built.** Delivery
    is not advertised on this site. The `cafe.delivery` feature flag exists and is `false`.
 
+4. **"Sahiwal's First Padel Court" is a marketing claim by the venue.** It is stored as editable CMS
+   copy, not hardcoded, and is not emitted as structured data.
+
 5. **Opening hours drive the whole system.** The 5pm–3am range from the Instagram bio is
    seeded for every day and is what generates bookable slots, defines a "trading night" on
    the dashboard, and decides whether a requested time is inside opening hours. If any day
    differs, change it at `/admin/schedule`.
-
-4. **"Sahiwal's First Padel Court" is a marketing claim by the venue.** It is stored as editable CMS
-   copy, not hardcoded, and is not emitted as structured data.
 
 ## 3. NOT verified — must be supplied before production
 

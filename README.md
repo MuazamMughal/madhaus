@@ -189,6 +189,23 @@ The venue trades **17:00 → 03:00**:
 - A **business day** is a trading night. A 01:30 session on Thursday belongs to Wednesday's
   night, with a 05:00 rollover.
 
+### Rendering
+
+Most public pages are prerendered and served from the CDN: they show configuration — sports,
+prices, hours, menu, editorial — which changes when staff change it, not per visitor. Sanity
+publishes push a tag revalidation, so edits appear without a rebuild.
+
+Two things are **never** prerendered, and the distinction matters:
+
+| | Why |
+|---|---|
+| `/book`, `/booking/[reference]`, `/account`, all of `/admin` | Per-visitor or live by definition |
+| `/arena/[sport]` | Shows tonight's remaining slots. Prerendered, those would freeze at build time and the CDN would keep serving them for days — telling a customer a court is free that was booked last week |
+
+A stale availability claim is worse than no claim, so any page that shows one is dynamic.
+The consequence is that **the build reads the database**: an unmigrated or unreachable
+Postgres fails the build rather than degrading at runtime.
+
 ### Money
 
 Integer minor units (paisa). No floats. Rates are per hour, pro-rated per minute, so a
@@ -212,7 +229,7 @@ token, so a forwarded payment link cannot cancel a booking.
 npm run db:up && npm test
 ```
 
-92 tests. Integration tests run against a real Postgres, because what they prove — the
+109 tests across 10 files. Integration tests run against a real Postgres, because what they prove — the
 exclusion constraint, advisory locks, transaction isolation under genuine concurrency —
 only exists in Postgres. A mock would test the mock.
 
@@ -230,6 +247,10 @@ only exists in Postgres. A mock would test the mock.
   off-peak into peak reprices.
 - **Configuration:** changing a rate changes what is quoted and is audited with before and
   after; changing hours changes which slots appear; closing a day empties it.
+- **Content:** an incomplete Sanity link resolves to `null` rather than a half-built `href`;
+  webhook signatures are rejected when forged, stale or unsigned.
+- **Time:** the trading night runs from one 05:00 rollover to the next, so a 17:00 opener
+  and a 02:40 session count against the same night.
 - **Units:** phone normalisation, money arithmetic, the timezone model, pricing bands,
   route protection.
 
@@ -240,11 +261,25 @@ this and tells you to run `npm run db:seed` rather than failing in thirty confus
 
 ## Deployment
 
+**Order matters.** The build prerenders pages that read the database (see
+*[Rendering](#rendering)*), so a database that is unreachable or has no schema fails the
+build rather than the first request. Migrate and seed *before* the first deploy.
+
 1. **Database.** Managed Postgres 17+ with the `btree_gist` and `pgcrypto` extensions, both
-   in contrib. Run `npm run db:verify` first, then `npm run db:migrate`. See
-   *[Managed Postgres](#managed-postgres)* below.
+   in contrib. Run `npm run db:verify`, then `npm run db:migrate`, then `npm run db:seed`.
+   See *[Managed Postgres](#managed-postgres)* below.
 2. **Environment.** Everything in `.env.example`. `SESSION_SECRET` and `CRON_SECRET` must
    be freshly generated. Do not carry `.env.development.local` across.
+
+   Two traps worth stating plainly, because neither fails the build:
+
+   - **`.env.example` holds placeholders, not defaults.** Its `DATABASE_URL` is
+     `localhost:5433`. Copying that file wholesale into a host's environment variables
+     produces a build that tries to reach a database on the build machine.
+   - **`NEXT_PUBLIC_SITE_URL` defaults to `http://localhost:3000`.** Leave it unset and the
+     site deploys perfectly, then every link in every customer email — confirmations, the
+     `.ics` attachment, the JazzCash payment link — points at localhost. There is no error
+     anywhere. Set it to the real domain before sending a single booking.
 3. **Email.** `RESEND_API_KEY`, `EMAIL_FROM`, `VENUE_NOTIFICATION_EMAIL`,
    `NOTIFICATION_CHANNELS=email`. **The booking flow runs on this** — without it the venue
    is never told a request came in.
@@ -310,6 +345,29 @@ fault. And `ALTER ROLE ... SET TimeZone` in migration 0006 may be refused; that 
 harmless, because no query depends on the session time zone, and `db:verify` reports the
 live value either way.
 
+#### Vercel
+
+Set the environment variables under **Settings → Environment Variables**, scoped to
+Production, Preview and Development. `DATABASE_URL` there is the **pooled** host: a
+serverless platform opens connections faster than a Postgres instance accepts them, and the
+pooler absorbs that. Migrations are run from a developer machine against the **direct**
+host, not from the build.
+
+An inline variable overrides `.env.local`, because dotenv does not replace values already in
+the environment. So a one-off command against production is safe and does not touch the
+local database:
+
+```bash
+DATABASE_URL="<direct host>" npm run db:migrate
+```
+
+Seeding needs `SEED_OWNER_EMAIL` and `SEED_OWNER_PASSWORD` in the same command. Without
+them the seed prints *"no owner account created"* and continues, leaving a database nobody
+can sign in to.
+
+Scheduled jobs are a Vercel Cron entry pointing at `POST /api/cron/run`; see
+*[Scheduled jobs](docs/INTEGRATIONS.md)* for the authorization header.
+
 ---
 
 ## Documentation
@@ -346,10 +404,12 @@ src/
     payments/           payment adapters
     notifications/      templates, delivery adapters, calendar invites
     content/            CMS reads with labelled sample fallbacks
+    sanity/             client, link resolution, webhook verification
   server/               server-only services
   proxy.ts              what earlier Next.js versions called middleware
 drizzle/migrations/     hand-written SQL — authoritative
 sanity/                 Studio schemas and structure
+scripts/                migrate, seed, db-check, and local development helpers
 tests/                  unit and integration tests
 ```
 

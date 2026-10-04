@@ -311,6 +311,19 @@ for a human rather than retried forever.
 - Fonts self-hosted and subset via `next/font`. No third-party scripts, no analytics, no
   social embeds. Most pages ship no client JavaScript beyond the header.
 
+**What is cached, and what deliberately is not.** Pages showing configuration — sports,
+prices, hours, menu, editorial — are prerendered and served from the CDN, and a Sanity
+publish revalidates them by tag without a rebuild. Pages showing live or per-visitor state
+are rendered per request: `/book`, `/booking/[reference]`, `/account` and all of `/admin`.
+
+`/arena/[sport]` belongs in the second group for a reason worth recording. It shows
+tonight's remaining slots. Prerendered, those slots freeze at build time and the CDN keeps
+serving them for days, telling a customer a court is free that was booked last week. A
+stale availability claim is worse than no claim, so every page making one is dynamic.
+
+The cost is that the build reads the database: an unmigrated or unreachable Postgres fails
+the build rather than the first request.
+
 > **Performance has not been measured.** No Lighthouse score is claimed anywhere, because
 > none has been run against a production deployment with real images. Measure it once the
 > photography is in — that is what will decide the numbers.
@@ -377,7 +390,7 @@ Honest list. Nothing below is half-wired or pretending.
 
 ## 14. Verified by tests
 
-92 tests. Integration tests run against a real Postgres, because what they prove — the
+109 tests across 10 files. Integration tests run against a real Postgres, because what they prove — the
 exclusion constraint, advisory locks, transaction isolation under genuine concurrency —
 exists only in Postgres. A mock would test the mock.
 
@@ -397,6 +410,10 @@ exists only in Postgres. A mock would test the mock.
 - Changing opening hours changes which slots appear; closing a day empties it
 - Staff bookings and maintenance block customer bookings; maintenance is refused over an
   existing booking
+- An incomplete Sanity link resolves to `null` rather than a half-built `href`; forged,
+  stale and unsigned webhook deliveries are all rejected
+- A trading night runs from one 05:00 rollover to the next, so a 17:00 opener and a 02:40
+  session count against the same night
 - Phone normalisation, money arithmetic, the timezone model, pricing bands, route
   protection
 

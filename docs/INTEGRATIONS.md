@@ -12,14 +12,15 @@ they gate is *going live*, not development.
 
 | Integration | Status | Blocks launch? |
 |---|---|---|
-| PostgreSQL | **Working** | — |
+| PostgreSQL (Neon in production) | **Working** | — |
+| Hosting (Vercel) | **Working** | — |
 | Request → approve booking flow | **Working** | — |
 | Pay at venue | **Working** | — |
 | JazzCash (manual, staff-verified) | **Working** (needs the account details) | Yes, if paying online is wanted |
 | Email via Resend | **Built** (needs an API key) | **Yes — the flow runs on it** |
 | Payment simulator | Development only; refuses to run in production | — |
 | Sanity CMS | **Working** (needs a project) | Yes |
-| Scheduled jobs | **Working** (needs a scheduler) | Recommended |
+| Scheduled jobs | **Working** (needs a scheduler) | **Yes — queued email is not sent without it** |
 | WhatsApp / SMS | Not implemented | No |
 
 **There is no card gateway and no webhook, by design.** Money arrives two ways: cash or
@@ -102,11 +103,20 @@ POST /api/cron/run
 Authorization: Bearer $CRON_SECRET
 ```
 
-Every minute or two. It delivers queued email, releases requests nobody decided on, and
-prunes expired sessions.
+Every minute or two. On Vercel that is a Cron entry; anywhere else, any scheduler that can
+send a header.
 
-Under this flow the email delivery is the important part: without the cron running, queued
-messages sit in the outbox and the venue is not alerted.
+It does three things, and they are not equally important:
+
+- **Delivers queued email.** This one matters. A booking request writes its notification to
+  an outbox in the same transaction as the booking, so the alert cannot be lost — but
+  nothing sends it until the cron runs. Without the scheduler the venue is never told a
+  request arrived, which is the whole flow.
+- **Releases requests nobody decided on.** Not required for correctness: expired holds are
+  also swept on every availability read and at the start of every booking write. Without
+  the cron, a slot abandoned at 2am stays blocked only until someone next looks at that
+  date.
+- **Prunes expired sessions and rate-limit buckets.** Housekeeping.
 
 ---
 
@@ -130,23 +140,7 @@ would misrepresent the business.
 
 ---
 
-## 5. Scheduled jobs — NEEDS A SCHEDULER
-
-```
-POST /api/cron/run
-Authorization: Bearer $CRON_SECRET
-```
-
-Every minute or two. It releases expired holds, delivers queued notifications, and prunes
-expired sessions and rate-limit buckets.
-
-Not required for correctness — expired holds are also swept on every availability read and
-at the start of every booking write — but without it a slot abandoned at 2am stays blocked
-until someone next looks at that date.
-
----
-
-## 6. Content and business decisions
+## 5. Content and business decisions
 
 These are not engineering tasks, but the site cannot launch without them. The full list is
 in [`ASSETS.md`](ASSETS.md). The ones that block hardest:
@@ -166,7 +160,7 @@ in [`ASSETS.md`](ASSETS.md). The ones that block hardest:
 
 ---
 
-## 7. Things deliberately switched off
+## 6. Things deliberately switched off
 
 Every one of these is implemented to the point where enabling it is a settings change, and
 off because enabling it would mean claiming something untrue.
@@ -182,7 +176,7 @@ off because enabling it would mean claiming something untrue.
 
 ---
 
-## 8. Not measured
+## 7. Not measured
 
 Performance has **not** been measured on real hardware or a real network. No Lighthouse
 score is claimed anywhere in this project, because none has been run against a production
@@ -197,7 +191,7 @@ Measure it once real photography is in place; images are what will decide the nu
 
 ---
 
-## 9. Built but not surfaced in the interface
+## 8. Built but not surfaced in the interface
 
 Working server-side, with no customer-facing UI yet. Each is a page, not a redesign.
 
@@ -214,7 +208,7 @@ Working server-side, with no customer-facing UI yet. Each is a page, not a redes
 
 ---
 
-## 10. Making CMS edits appear immediately
+## 9. Making CMS edits appear immediately
 
 Two caches sit between the Studio and a visitor: **Sanity's CDN** (eventually consistent)
 and **Next's fetch cache** (tagged). They are handled differently per environment, because
