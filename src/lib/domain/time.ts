@@ -157,6 +157,15 @@ export function venueDayOfWeek(date: VenueDate): number {
 }
 
 /**
+ * The venue-local minute at which one trading night becomes the next.
+ *
+ * 05:00. The venue closes at 03:00, so nothing is ever open across this boundary and no
+ * session is ever split by it. Exported because queries that count a night's takings need
+ * the same boundary the rota and the till use.
+ */
+export const VENUE_DAY_ROLLOVER_MINUTE: MinutesFromMidnight = 300;
+
+/**
  * The business day an instant trades on.
  *
  * Anything before `dayRollsOverAtMinute` (venue-local) counts as the previous calendar
@@ -164,7 +173,10 @@ export function venueDayOfWeek(date: VenueDate): number {
  * With the default of 300 (05:00), a 02:40 padel session on the 5th is filed under
  * the 4th -- which is the night the customer booked and the shift that served them.
  */
-export function venueBusinessDate(instant: Date, dayRollsOverAtMinute = 300): VenueDate {
+export function venueBusinessDate(
+  instant: Date,
+  dayRollsOverAtMinute: MinutesFromMidnight = VENUE_DAY_ROLLOVER_MINUTE,
+): VenueDate {
   const wall = toVenueWallClock(instant);
   const minutes = wall.hour * 60 + wall.minute;
   const calendarDate = `${pad(wall.year, 4)}-${pad(wall.month, 2)}-${pad(wall.day, 2)}`;

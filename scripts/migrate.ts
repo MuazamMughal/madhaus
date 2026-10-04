@@ -11,6 +11,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Client } from "pg";
+import { pgSslOptions } from "@/lib/db/ssl";
 import "./load-env";
 
 const MIGRATIONS_DIR = join(process.cwd(), "drizzle", "migrations");
@@ -23,7 +24,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const client = new Client({ connectionString });
+  const client = new Client({
+    connectionString,
+    ...pgSslOptions(connectionString),
+  });
   await client.connect();
 
   try {

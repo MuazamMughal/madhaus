@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  VENUE_DAY_ROLLOVER_MINUTE,
   addVenueDays,
   formatLocalTime,
   formatLocalTime12h,
@@ -88,6 +89,42 @@ describe("venue time", () => {
     expect(formatLocalTime12h(0)).toBe("12:00 am");
     expect(formatLocalTime12h(12 * 60)).toBe("12:00 pm");
     expect(formatLocalTime12h(17 * 60)).toBe("5:00 pm");
+  });
+
+  /*
+   * The reporting window on /admin/reports is built from this constant rather than left
+   * to a date-to-timestamptz cast in SQL, which would resolve against the session time
+   * zone. These assertions pin the boundary so a change to the rollover cannot silently
+   * move what a night's takings are counted against.
+   */
+  it("puts the day boundary at 05:00 venue time, after the 03:00 close", () => {
+    expect(VENUE_DAY_ROLLOVER_MINUTE).toBe(5 * 60);
+
+    const boundary = venueDateToInstant("2026-10-04", VENUE_DAY_ROLLOVER_MINUTE);
+    // Karachi is UTC+5 year round, so the venue's 05:00 is midnight UTC.
+    expect(boundary.toISOString()).toBe("2026-10-04T00:00:00.000Z");
+  });
+
+  it("covers a whole trading night between one rollover and the next", () => {
+    const start = venueDateToInstant("2026-10-04", VENUE_DAY_ROLLOVER_MINUTE);
+    const end = venueDateToInstant(addVenueDays("2026-10-04", 1), VENUE_DAY_ROLLOVER_MINUTE);
+
+    // A 17:00 opener and a 02:40 session on the following calendar day both trade on the
+    // 4th and must both fall inside the window.
+    const opener = venueDateToInstant("2026-10-04", 17 * 60);
+    const lateSession = venueDateToInstant("2026-10-05", 2 * 60 + 40);
+    for (const instant of [opener, lateSession]) {
+      expect(instant.getTime()).toBeGreaterThanOrEqual(start.getTime());
+      expect(instant.getTime()).toBeLessThan(end.getTime());
+    }
+
+    // The next night's opener must not.
+    expect(venueDateToInstant("2026-10-05", 17 * 60).getTime()).toBeGreaterThanOrEqual(
+      end.getTime(),
+    );
+
+    // And each session's own business date agrees with the window it landed in.
+    expect(venueBusinessDate(lateSession)).toBe("2026-10-04");
   });
 
   it("rejects dates that do not exist", () => {

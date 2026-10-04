@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { verifySanityWebhookSignature } from "@/lib/sanity/webhook";
 import { revalidateTag } from "next/cache";
 import { serverEnv } from "@/lib/env";
 
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   const rawBody = await request.text();
   const signatureHeader = request.headers.get("sanity-webhook-signature");
 
-  if (!signatureHeader || !verifySignature(rawBody, signatureHeader, secret)) {
+  if (!signatureHeader || !verifySanityWebhookSignature(rawBody, signatureHeader, secret)) {
     return Response.json({ error: "Invalid signature" }, { status: 401 });
   }
 
@@ -55,42 +55,19 @@ export async function POST(request: Request) {
   };
   for (const extra of alsoAffects[documentType] ?? []) tags.add(extra);
 
-  // Next 16 requires a cache-life profile. "max" gives stale-while-revalidate: the next
-  // visitor is served the cached page immediately while the fresh one is fetched behind
-  // them, and everyone after that gets the new content. `updateTag`, which is immediate,
-  // is only callable from a Server Action, not from a route handler like this one.
-  for (const tag of tags) revalidateTag(tag, "max");
+  /*
+   * `{ expire: 0 }` rather than a named profile.
+   *
+   * A profile like "max" gives stale-while-revalidate: the next visitor still sees the OLD
+   * page while the new one is fetched behind them. For a CMS publish that is the wrong
+   * trade — an editor who just pressed Publish and reloads expects to see their change,
+   * not the previous version. Expiring immediately costs one slow request and is correct.
+   *
+   * `updateTag` would also be immediate but is only callable from a Server Action, not
+   * from a route handler like this one.
+   */
+  for (const tag of tags) revalidateTag(tag, { expire: 0 });
 
   return Response.json({ revalidated: [...tags], at: new Date().toISOString() });
 }
 
-/**
- * Sanity's signature header: `t=<timestamp>,v1=<base64url hmac>`.
- * The signed payload is `<timestamp>.<body>`.
- */
-function verifySignature(body: string, header: string, secret: string): boolean {
-  const parts = Object.fromEntries(
-    header.split(",").map((piece) => {
-      const [key, ...rest] = piece.trim().split("=");
-      return [key, rest.join("=")];
-    }),
-  );
-
-  const timestamp = parts.t;
-  const signature = parts.v1;
-  if (!timestamp || !signature) return false;
-
-  // Reject anything older than five minutes, so a captured request cannot be replayed
-  // indefinitely.
-  const age = Math.abs(Date.now() - Number.parseInt(timestamp, 10));
-  if (!Number.isFinite(age) || age > 5 * 60 * 1000) return false;
-
-  const expected = createHmac("sha256", secret)
-    .update(`${timestamp}.${body}`)
-    .digest("base64url");
-
-  const provided = Buffer.from(signature, "utf8");
-  const computed = Buffer.from(expected, "utf8");
-  if (provided.length !== computed.length) return false;
-  return timingSafeEqual(provided, computed);
-}

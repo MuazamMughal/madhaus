@@ -18,9 +18,11 @@
     "sanity:seed": "tsx scripts/seed-sanity.ts",
     "db:studio": "drizzle-kit studio",
     "db:check": "tsx scripts/schema-drift.ts",
+    "db:verify": "tsx scripts/db-check.ts",
     "verify": "npm run typecheck && npm run lint && npm run test",
     "dev:session": "tsx scripts/dev-session.ts",
-    "sanity:peek": "tsx scripts/sanity-peek.mts"
+    "sanity:peek": "tsx scripts/sanity-peek.mts",
+    "sanity:hooks": "tsx scripts/sanity-hooks.mts"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

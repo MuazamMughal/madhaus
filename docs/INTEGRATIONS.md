@@ -211,3 +211,83 @@ Working server-side, with no customer-facing UI yet. Each is a page, not a redes
 | Transaction export | `/admin/reports` renders the figures; there is no CSV download. |
 | Audit log viewer | Every significant action is written to `audit_log`; the dashboard does not display it. Readable with SQL. |
 | Sanity draft preview | The client supports a preview perspective and a viewer token; there is no draft-mode route to turn it on. |
+
+---
+
+## 10. Making CMS edits appear immediately
+
+Two caches sit between the Studio and a visitor: **Sanity's CDN** (eventually consistent)
+and **Next's fetch cache** (tagged). They are handled differently per environment, because
+a webhook cannot reach `localhost`.
+
+### Development — already instant. Do NOT register a webhook.
+
+> **`http://localhost:3000/api/revalidate` cannot be used as a webhook URL, and Sanity will
+> reject it.** Sanity's servers are on the internet; `localhost` is your own machine. There
+> is nothing for them to reach.
+>
+> You do not need one. Reads bypass both caches when `NODE_ENV !== "production"` — edit in
+> `/studio`, refresh, the change is there. It costs an uncached API request per read, which
+> does not matter locally and is exactly why the behaviour is environment-gated.
+
+The webhook exists only for the deployed site, where caching is on and the URL is public.
+
+#### Testing the webhook path locally anyway
+
+Two options, neither of them necessary for day-to-day work:
+
+```bash
+# 1. Fire signed deliveries straight at the local endpoint. No tunnel, no public URL.
+npm run sanity:hooks
+
+# 2. Or expose the dev server and register THAT url in sanity.io/manage.
+cloudflared tunnel --url http://localhost:3000      # or: ngrok http 3000
+```
+
+A tunnel URL changes every restart, so it is for a one-off check, not something to leave
+configured.
+
+### Production — the webhook
+
+Register it once at **sanity.io/manage → your project → API → Webhooks**:
+
+| Field | Value |
+|---|---|
+| **Name** | Revalidate the site |
+| **URL** | `https://<your-domain>/api/revalidate` |
+| **Dataset** | `production` |
+| **Trigger on** | Create, Update, Delete |
+| **Filter** | leave empty (all document types) |
+| **Projection** | `{_type, _id}` |
+| **HTTP method** | POST |
+| **API version** | `v2021-03-25` or later |
+| **Secret** | the value of `SANITY_REVALIDATE_SECRET` |
+
+The endpoint then:
+
+1. **Verifies the signature** before acting on anything. A delivery with a bad signature,
+   or one more than five minutes old, is refused — otherwise the URL is a public button
+   anyone can press to make the site purge its cache.
+2. **Expires only the affected tags**, plus anything that embeds them. Publishing one menu
+   item does not evict the whole site.
+3. **Expires immediately** (`{ expire: 0 }`) rather than stale-while-revalidate. An editor
+   who presses Publish and reloads should see their change, not the previous version.
+
+### Checking it without deploying
+
+```bash
+npm run sanity:hooks
+```
+
+Fires four deliveries at the local endpoint — one correctly signed, one forged, one
+replayed, one malformed — and prints what each got back. Expect `200`, then three `401`s.
+
+### If edits still do not appear in production
+
+- `SANITY_REVALIDATE_SECRET` set on the deployment, and identical to the one in the
+  webhook? A mismatch looks exactly like a forged request: `401`.
+- Does the webhook's delivery log in sanity.io/manage show `200`? It records every attempt
+  and the response.
+- Is the URL `https://` and publicly reachable? Sanity cannot reach a private network.
+- An **unset** secret makes the endpoint return `503` and revalidate nothing, by design —
+  it will not silently accept unsigned requests.

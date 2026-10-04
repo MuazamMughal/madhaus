@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { formatPkr } from "@/lib/domain/money";
-import { addVenueDays, venueBusinessDate } from "@/lib/domain/time";
+import {
+  addVenueDays,
+  venueBusinessDate,
+  venueDateToInstant,
+  VENUE_DAY_ROLLOVER_MINUTE,
+} from "@/lib/domain/time";
 import { pool } from "@/lib/db/client";
 
 export const metadata: Metadata = { title: "Reports", robots: { index: false, follow: false } };
@@ -21,6 +26,17 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
   const today = venueBusinessDate(new Date());
   const from = addVenueDays(today, -days);
 
+  /*
+   * Resolve the reporting window to absolute instants here rather than letting Postgres
+   * cast a date to timestamptz. That cast uses the session time zone, so the same query
+   * would silently report a different window on a connection whose time zone was not what
+   * we expected -- and it would never be wrong by enough to look obviously wrong, only by
+   * five hours at each edge. These two instants carry the venue's 05:00 rollover
+   * explicitly, which is the boundary the business actually counts a night against.
+   */
+  const windowStart = venueDateToInstant(from, VENUE_DAY_ROLLOVER_MINUTE);
+  const windowEnd = venueDateToInstant(addVenueDays(today, 1), VENUE_DAY_ROLLOVER_MINUTE);
+
   const [bySport, byResource, outcomes, cafe] = await Promise.all([
     pool().query(
       `SELECT s.name,
@@ -28,33 +44,33 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
               COALESCE(sum(b.amount_paid_minor) FILTER (WHERE b.status <> 'cancelled'), 0)::bigint AS collected,
               COALESCE(sum(b.total_minor - b.amount_paid_minor) FILTER (WHERE b.status IN ('confirmed','pending_approval')), 0)::bigint AS outstanding
          FROM bookings b JOIN sports s ON s.id = b.sport_id
-        WHERE b.starts_at >= $1::date AND b.starts_at < ($2::date + 1)
+        WHERE b.starts_at >= $1 AND b.starts_at < $2
         GROUP BY s.name ORDER BY bookings DESC`,
-      [from, today],
+      [windowStart, windowEnd],
     ),
     pool().query(
       `SELECT r.name,
               count(*) FILTER (WHERE b.status <> 'cancelled')::int AS bookings,
               COALESCE(sum(b.duration_minutes) FILTER (WHERE b.status <> 'cancelled'), 0)::int AS booked_minutes
          FROM bookings b JOIN resources r ON r.id = b.resource_id
-        WHERE b.starts_at >= $1::date AND b.starts_at < ($2::date + 1)
+        WHERE b.starts_at >= $1 AND b.starts_at < $2
         GROUP BY r.name ORDER BY r.name`,
-      [from, today],
+      [windowStart, windowEnd],
     ),
     pool().query(
       `SELECT status::text, count(*)::int AS n
          FROM bookings
-        WHERE starts_at >= $1::date AND starts_at < ($2::date + 1)
+        WHERE starts_at >= $1 AND starts_at < $2
         GROUP BY status ORDER BY n DESC`,
-      [from, today],
+      [windowStart, windowEnd],
     ),
     pool().query(
       `SELECT count(*)::int AS orders,
               COALESCE(sum(total_minor), 0)::bigint AS total,
               COALESCE(sum(amount_paid_minor), 0)::bigint AS collected
          FROM cafe_orders
-        WHERE created_at >= $1::date AND status NOT IN ('cancelled','rejected')`,
-      [from],
+        WHERE created_at >= $1 AND status NOT IN ('cancelled','rejected')`,
+      [windowStart],
     ),
   ]);
 

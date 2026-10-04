@@ -14,6 +14,21 @@ import type { ImageRef } from "@/lib/content/types";
  * passed to a client component.
  */
 
+/**
+ * In development, edits must show up on the next refresh.
+ *
+ * A Sanity webhook cannot reach localhost, so the production revalidation path does
+ * nothing on a developer's machine. Rather than leave editors wondering why a change has
+ * not appeared, development reads bypass both caches: Sanity's CDN (eventually
+ * consistent) and Next's fetch cache.
+ *
+ * It costs an uncached API request per read, which is irrelevant locally and would not be
+ * in production — hence the switch.
+ */
+function liveEditing(): boolean {
+  return serverEnv().NODE_ENV !== "production";
+}
+
 export function sanityClient(options: { preview?: boolean } = {}) {
   const env = serverEnv();
   if (!env.NEXT_PUBLIC_SANITY_PROJECT_ID) {
@@ -24,8 +39,9 @@ export function sanityClient(options: { preview?: boolean } = {}) {
     projectId: env.NEXT_PUBLIC_SANITY_PROJECT_ID,
     dataset: env.NEXT_PUBLIC_SANITY_DATASET,
     apiVersion: env.NEXT_PUBLIC_SANITY_API_VERSION,
-    // Drafts must come from the origin, and must never be served from a shared cache.
-    useCdn: !options.preview,
+    // Drafts must come from the origin and never from a shared cache. In development the
+    // CDN is skipped entirely so an edit is visible on the next refresh.
+    useCdn: !options.preview && !liveEditing(),
     ...(options.preview
       ? { token: env.SANITY_API_READ_TOKEN, perspective: "drafts" as const }
       : { perspective: "published" as const }),
@@ -46,8 +62,9 @@ export async function sanityFetch<T>({
 }): Promise<T> {
   const client = sanityClient({ preview });
 
-  if (preview) {
-    // Draft content is per-request by definition.
+  // Drafts are per-request by definition; so is everything in development, so an edit in
+  // the Studio appears on the next refresh without a webhook that cannot reach localhost.
+  if (preview || liveEditing()) {
     return client.fetch<T>(query, params, { cache: "no-store" });
   }
 

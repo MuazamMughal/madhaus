@@ -18,6 +18,7 @@
  * Safe to re-run: every insert is keyed on a natural unique column and upserts.
  */
 import { Client } from "pg";
+import { pgSslOptions } from "@/lib/db/ssl";
 import { scryptSync, randomBytes } from "node:crypto";
 import "./load-env";
 
@@ -41,7 +42,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const client = new Client({ connectionString });
+  const client = new Client({
+    connectionString,
+    ...pgSslOptions(connectionString),
+  });
   await client.connect();
 
   try {

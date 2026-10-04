@@ -58,6 +58,7 @@ account it created, and the password is `SEED_OWNER_PASSWORD` in `.env.developme
 | `npm run db:migrate` | Apply pending migrations |
 | `npm run db:reset` | Drop everything and re-apply (development only) |
 | `npm run db:seed` | Seed configuration and sample content |
+| `npm run db:verify` | Check a connection string can run this app (see *Managed Postgres*) |
 | `npm run dev:session` | Mint a staff session token for local testing |
 | `npm run check-login` | Confirm an email/password pair verifies |
 
@@ -240,7 +241,8 @@ this and tells you to run `npm run db:seed` rather than failing in thirty confus
 ## Deployment
 
 1. **Database.** Managed Postgres 17+ with the `btree_gist` and `pgcrypto` extensions, both
-   in contrib. Run `npm run db:migrate` against it.
+   in contrib. Run `npm run db:verify` first, then `npm run db:migrate`. See
+   *[Managed Postgres](#managed-postgres)* below.
 2. **Environment.** Everything in `.env.example`. `SESSION_SECRET` and `CRON_SECRET` must
    be freshly generated. Do not carry `.env.development.local` across.
 3. **Email.** `RESEND_API_KEY`, `EMAIL_FROM`, `VENUE_NOTIFICATION_EMAIL`,
@@ -252,12 +254,61 @@ this and tells you to run `npm run db:seed` rather than failing in thirty confus
 6. **Scheduled jobs.** Point a scheduler at `POST /api/cron/run` every minute or two with
    `Authorization: Bearer $CRON_SECRET`. It delivers queued email, releases undecided
    requests, and prunes sessions.
-7. **Sanity.** Create a project, set `NEXT_PUBLIC_SANITY_*`, and add a webhook to
-   `POST /api/revalidate` signed with `SANITY_REVALIDATE_SECRET`.
+7. **Sanity.** Create a project and set `NEXT_PUBLIC_SANITY_*`. Then add a webhook at
+   sanity.io/manage pointing at `https://<your-domain>/api/revalidate`, signed with
+   `SANITY_REVALIDATE_SECRET`, so published edits appear immediately.
+   *Do not add this webhook while developing locally* — Sanity cannot reach `localhost`,
+   and development already reads uncached, so edits are instant without it.
 8. **Seed the first owner**, then change the password immediately.
 
 Read **[`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md)** before going public — some
 integrations are deliberately not wired up, and the site says so rather than pretending.
+
+---
+
+### Managed Postgres
+
+The booking system rests on one database feature: a GiST exclusion constraint on
+`reservations` that makes a double-booking impossible to insert. Before trusting a new
+database with it, prove it:
+
+```bash
+npm run db:verify                      # checks DATABASE_URL
+npm run db:verify -- "postgres://..."  # checks a specific connection string
+```
+
+That connects, confirms `btree_gist` and `pgcrypto` are installable, **builds a real
+exclusion constraint and tries to double-book it**, and exercises the advisory locks and
+`FOR UPDATE SKIP LOCKED` the booking path and the sweeper depend on. It touches nothing
+but a temporary table inside a rolled-back transaction, so it is safe against a live
+database.
+
+#### Neon
+
+Neon gives two hostnames for the same database. Both are in the console under **Connection
+Details**; the **Connection pooling** toggle switches between them.
+
+| | Host | Use it for |
+|---|---|---|
+| Pooled | `ep-xxx-pooler.region.aws.neon.tech` | `DATABASE_URL` for the running app |
+| Direct | `ep-xxx.region.aws.neon.tech` | `npm run db:migrate` |
+
+Use the **pooled** host for the app: serverless functions open connections faster than a
+Postgres instance can accept them, and the pooler absorbs that. Run migrations through the
+**direct** host, because DDL and transaction pooling do not mix well.
+
+Copy the string from the console — it already carries the password and `?sslmode=require`,
+which `pgSslOptions()` in `src/lib/db/ssl.ts` keys off to enable TLS. Then:
+
+```bash
+npm run db:verify && npm run db:migrate && npm run db:seed
+```
+
+Two things to expect. The first query after an idle period takes a few seconds while the
+compute resumes — `db:verify` labels that *cold start* rather than letting it look like a
+fault. And `ALTER ROLE ... SET TimeZone` in migration 0006 may be refused; that is
+harmless, because no query depends on the session time zone, and `db:verify` reports the
+live value either way.
 
 ---
 

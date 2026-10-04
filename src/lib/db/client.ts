@@ -1,6 +1,7 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool, type PoolClient } from "pg";
 import { serverEnv } from "@/lib/env";
+import { pgSslOptions } from "./ssl";
 import * as schema from "./schema";
 
 /**
@@ -21,11 +22,22 @@ function createPool(): Pool {
     max: env.NODE_ENV === "production" ? 10 : 5,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
-    // Every session works in UTC. Conversion to Asia/Karachi happens in application
-    // code (see lib/domain/time.ts), never implicitly in the database, so a misconfigured
-    // server timezone cannot shift a booking.
-    options: "-c timezone=UTC",
+    ...pgSslOptions(env.DATABASE_URL),
   });
+
+  /*
+   * The session time zone is UTC, pinned on the database role by migration
+   * 0006_session_timezone.sql rather than set here.
+   *
+   * A `pool.on("connect")` handler issuing `SET TIME ZONE` is the obvious thing to write
+   * and is wrong twice over: node-postgres does not await the handler, so the client is
+   * handed out while the SET is still queued, and on a transaction-pooling endpoint a SET
+   * outside a transaction need not apply to the backend that serves the next statement.
+   *
+   * Nothing here depends on it for correctness in any case -- every instant is timestamptz
+   * and every venue-local conversion happens in lib/domain/time.ts. `npm run db:verify`
+   * reports the live session zone.
+   */
 
   pool.on("error", (error) => {
     // An idle client erroring is not fatal; the pool will replace it. Logged without
