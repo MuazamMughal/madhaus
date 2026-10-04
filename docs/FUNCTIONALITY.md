@@ -259,8 +259,10 @@ Sanity is **not** the booking database, and no customer's personal data ever ent
 Sanity dataset. Complete menu records are managed in Admin and stored in PostgreSQL.
 Menu photo files use Sanity asset storage; their references and alt text live in PostgreSQL.
 Legacy Studio menu records are read-only import sources. For the transition and staff
-workflow, see [MENU-MANAGEMENT.md](MENU-MANAGEMENT.md). Events and offers still separate
-editorial content from transactional capacity and discount rules.
+workflow, see [MENU-MANAGEMENT.md](MENU-MANAGEMENT.md). For the exact connected CMS
+fields, database ownership and Studio fields that are not yet connected, see
+[DATA-OWNERSHIP.md](DATA-OWNERSHIP.md). Public events currently read PostgreSQL;
+Sanity event/offer editorial documents are not connected to those readers.
 
 16 document types, with required alt text on every image, hotspot cropping, singletons that
 cannot be duplicated, and a constrained editor rather than a free-form page builder.
