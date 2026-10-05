@@ -1,17 +1,8 @@
 import { ButtonLink } from "@/components/ui/button";
-import { MediaPanel } from "@/components/ui/media-panel";
+import { HeroImages } from "./hero-images";
 import type { HeroContent } from "@/lib/content/types";
 
-/**
- * Hero.
- *
- * Oversized display type with author-chosen line breaks, over a full-bleed image. When
- * video is supplied it is muted, autoplays, loops, carries a poster, and is hidden from
- * users who asked for reduced motion -- who get the poster frame instead, which is why
- * the poster is required rather than optional.
- *
- * There is no scroll hijacking and nothing here is only available on hover.
- */
+/** Homepage headline over the sport slideshow, with a readable dark scrim. */
 export function Hero({ content, hoursLabel }: { content: HeroContent; hoursLabel: string | null }) {
   const lines = content.headlineLines ?? [content.headline];
 
@@ -22,39 +13,7 @@ export function Hero({ content, hoursLabel }: { content: HeroContent; hoursLabel
       // it, while the header still takes its space for every other page.
       className="surface relative isolate -mt-18 overflow-hidden sm:-mt-20"
     >
-      {/* Background media */}
-      <div className="absolute inset-0 -z-10">
-        {content.video ? (
-          <video
-            // Muted and inert: a video that makes noise on a venue's homepage is hostile.
-            autoPlay
-            muted
-            loop
-            playsInline
-            poster={content.video.poster}
-            // Reduced-motion users never load or play it; CSS below hides it and the
-            // poster image underneath carries the same frame.
-            className="motion-reduce:hidden size-full object-cover"
-          >
-            <source src={content.video.src} type="video/mp4" />
-          </video>
-        ) : (
-          <MediaPanel
-            image={content.image}
-            aspect="fill"
-            motif="crowd"
-            priority
-            sizes="100vw"
-            hidePlaceholderLabel
-            placeholderLabel="hero — the courts under floodlights, people playing"
-          />
-        )}
-        {/* Scrim: the headline must stay legible whatever the photograph turns out to be. */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 bg-gradient-to-t from-charcoal via-charcoal/70 to-charcoal/35"
-        />
-      </div>
+      <HeroImages image={content.image} />
 
       <div className="shell flex min-h-[86svh] flex-col justify-end pt-36 pb-14 sm:min-h-[92svh] sm:pb-20">
         <p className="text-eyebrow font-display mb-6 flex items-center gap-3 text-lime uppercase">

@@ -9,7 +9,7 @@ described in [MENU-MANAGEMENT.md](MENU-MANAGEMENT.md).
 | Content | Connected fields |
 | --- | --- |
 | Site settings | Brand, tagline, city, address, map, coordinates, phone, WhatsApp, email, hours note and social links |
-| Homepage | Hero headline/lines, subhead, location label, CTA links, image and video |
+| Homepage | Hero headline/lines, subhead, location label, CTA links and leading slideshow image |
 | Navigation | Primary header links |
 | Sports | Blurb and hero image, matched to a database sport by slug |
 | FAQs | Questions, answers and display order on About |
@@ -20,7 +20,7 @@ the public website.
 
 Studio also contains fields/documents that the public app does not currently read:
 homepage intro, marquee and amenities; dedicated Café/About/Contact page copy;
-design tokens; gallery; event/offer editorial documents; legal content; footer link
+design tokens; gallery; event/offer editorial documents; legal content; hero video; footer link
 groups and navigation closing statement. Editing those does not change the app until
 their readers and components are connected. Layout, styling and much page copy remain
 in code and require a code change and deployment.
