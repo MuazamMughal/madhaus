@@ -244,12 +244,12 @@ export async function decideTableRequest(args: {
 /** The café queue for the staff dashboard. */
 export async function listTableRequests(options: { status?: string; limit?: number } = {}) {
   const { rows } = await pool().query(
-    `SELECT r.id, r.reference, r.customer_name, r.customer_phone, r.party_size, r.starts_at,
+    `SELECT r.id, r.reference, r.customer_name, r.customer_phone, r.customer_email, r.party_size, r.starts_at,
             r.status, r.notes, r.staff_note, r.created_at, t.label AS table_label
        FROM cafe_reservations r
        LEFT JOIN cafe_tables t ON t.id = r.table_id
       WHERE ($1::text IS NULL OR r.status::text = $1)
-      ORDER BY r.starts_at ASC
+      ORDER BY CASE WHEN r.status = 'requested' THEN r.created_at ELSE r.starts_at END ASC
       LIMIT $2`,
     [options.status ?? null, options.limit ?? 100],
   );
@@ -258,6 +258,7 @@ export async function listTableRequests(options: { status?: string; limit?: numb
     reference: row.reference,
     customerName: row.customer_name,
     customerPhone: row.customer_phone,
+    customerEmail: row.customer_email as string | null,
     partySize: row.party_size,
     startsAt: new Date(row.starts_at),
     status: row.status as string,

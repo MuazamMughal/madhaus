@@ -5,22 +5,26 @@ import { decideTableAction, type ActionState } from "@/app/admin/actions";
 import { ActionFeedback } from "./action-feedback";
 import { Button } from "@/components/ui/button";
 import { formatVenueDateTimeShort } from "@/lib/domain/time";
+import { whatsappClickToChatUrl } from "@/lib/domain/phone";
 
 /** Accept or decline a table request, optionally allocating a specific table. */
 export function TableRequestRow({
   request,
   tables,
+  canDecide = false,
 }: {
   request: {
     id: string;
     reference: string;
     customerName: string;
     customerPhone: string;
+    customerEmail: string | null;
     partySize: number;
     startsAt: string;
     notes: string | null;
   };
   tables: Array<{ id: string; label: string; seats: number }>;
+  canDecide?: boolean;
 }) {
   const [state, formAction, pending] = useActionState<ActionState, FormData>(decideTableAction, {});
   const [deciding, setDeciding] = useState<"confirm" | "reject" | null>(null);
@@ -38,21 +42,47 @@ export function TableRequestRow({
   const suitable = tables.filter((table) => table.seats >= request.partySize);
 
   return (
-    <li className="border border-charcoal-line p-5">
+    <li className="border border-pending p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="font-display" data-numeric="">
-            {request.reference}
+          <p className="font-display text-lg" data-numeric="">
+            {formatVenueDateTimeShort(new Date(request.startsAt))}
           </p>
           <p className="mt-1 text-sm">
-            {request.customerName}{" "}
-            <span className="text-grey-400" data-numeric="">
-              · {request.customerPhone}
-            </span>
+            <span className="font-semibold">Café table</span> · {request.partySize}{" "}
+            {request.partySize === 1 ? "person" : "people"}
           </p>
-          <p className="mt-1 text-sm text-grey-400">
-            {request.partySize} {request.partySize === 1 ? "person" : "people"} ·{" "}
-            {formatVenueDateTimeShort(new Date(request.startsAt))}
+          <p className="mt-2 text-sm font-medium">{request.customerName}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+            <a
+              href={`tel:${request.customerPhone}`}
+              className="font-display inline-flex min-h-10 items-center gap-2 border-2 border-lime px-4 text-xs text-lime uppercase transition hover:bg-lime hover:text-charcoal"
+            >
+              <span aria-hidden="true">✆</span>
+              <span data-numeric="">{request.customerPhone}</span>
+            </a>
+            <a
+              href={whatsappClickToChatUrl(
+                request.customerPhone,
+                `Hi ${request.customerName}, this is MadHaus about your table reservation ${request.reference}.`,
+              )}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-xs text-grey-300 underline decoration-2 underline-offset-4 hover:text-ivory"
+            >
+              WhatsApp
+            </a>
+            {request.customerEmail && (
+              <a
+                href={`mailto:${request.customerEmail}`}
+                className="text-xs text-grey-300 underline decoration-2 underline-offset-4 hover:text-ivory"
+              >
+                {request.customerEmail}
+              </a>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-grey-400" data-numeric="">
+            {request.reference}
           </p>
           {request.notes && (
             <p className="mt-2 border-l-2 border-charcoal-line pl-2 text-sm text-grey-300">
@@ -62,7 +92,7 @@ export function TableRequestRow({
         </div>
       </div>
 
-      <div className="mt-4 border-t border-charcoal-line pt-4">
+      {canDecide && <div className="mt-4 border-t border-charcoal-line pt-4">
         <ActionFeedback state={state} />
 
         {deciding === null ? (
@@ -132,7 +162,7 @@ export function TableRequestRow({
             </div>
           </form>
         )}
-      </div>
+      </div>}
     </li>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { TableRequestRow } from "@/components/admin/table-request-row";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, sessionHasPermission } from "@/lib/auth/permissions";
 import { pool } from "@/lib/db/client";
 import { listTableRequests } from "@/server/cafe-service";
 import { getFeatureFlags } from "@/server/public-queries";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  * empty queue that looks like a quiet night.
  */
 export default async function CafeAdminPage() {
-  await requirePermission("cafe.reservation.view");
+  const session = await requirePermission("cafe.reservation.view");
 
   const [requests, flags, tables] = await Promise.all([
     listTableRequests({ limit: 200 }),
@@ -52,6 +52,7 @@ export default async function CafeAdminPage() {
                 key={request.id}
                 request={{ ...request, startsAt: request.startsAt.toISOString() }}
                 tables={tables.rows}
+                canDecide={sessionHasPermission(session, "cafe.reservation.decide")}
               />
             ))}
           </ul>

@@ -258,6 +258,7 @@ export async function decideTableAction(
     });
 
     revalidatePath("/admin/cafe");
+    revalidatePath("/admin");
     return {
       ok: true,
       message:

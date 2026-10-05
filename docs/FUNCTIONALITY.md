@@ -208,7 +208,7 @@ Ten pages at `/admin`, behind a sign-in, plus a walk-in booking form at
 
 | Page | What staff do there |
 |---|---|
-| **Tonight** | Requests awaiting a decision, the night's schedule by court, counters, walk-ins, check-in |
+| **Tonight** | Court and table requests awaiting a decision, customer call/email/WhatsApp links, the night's schedule by court, counters, walk-ins, check-in. Table requests require café viewing permission; Accept/Decline require café decision permission. |
 | **Bookings** | Search by reference, name or phone. Cancel, reschedule, check in |
 | **Payments** | Verify JazzCash transaction IDs. View submitted screenshots |
 | **Rates** | Court prices, peak bands, days, priority. Shows unpriced gaps |

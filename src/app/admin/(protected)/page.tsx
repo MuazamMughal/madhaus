@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { DaySchedule } from "@/components/admin/day-schedule";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, sessionHasPermission } from "@/lib/auth/permissions";
+import { pool } from "@/lib/db/client";
+import { listTableRequests } from "@/server/cafe-service";
+import { TableRequestRow } from "@/components/admin/table-request-row";
 import { formatPkr } from "@/lib/domain/money";
 import { addVenueDays, formatVenueDateLong, venueBusinessDate } from "@/lib/domain/time";
 import {
@@ -34,11 +37,19 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   const date =
     requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : venueBusinessDate(new Date());
 
-  const [schedule, closures, counts, pendingRequests] = await Promise.all([
+  const canViewTables = sessionHasPermission(session, "cafe.reservation.view");
+  const canDecideTables = sessionHasPermission(session, "cafe.reservation.decide");
+  const [schedule, closures, counts, pendingRequests, tableRequests, tables] = await Promise.all([
     getDaySchedule(date),
     getDayClosures(date),
     getDashboardCounts(date),
     getPendingRequests(),
+    canViewTables ? listTableRequests({ status: "requested" }) : Promise.resolve([]),
+    canDecideTables
+      ? pool().query<{ id: string; label: string; seats: number }>(
+          "SELECT id, label, seats FROM cafe_tables WHERE is_active ORDER BY label",
+        ).then((result) => result.rows)
+      : Promise.resolve([]),
   ]);
 
   const isTonight = date === venueBusinessDate(new Date());
@@ -121,11 +132,11 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
                 </Link>
               </li>
             )}
-            {counts.tableRequestsPending > 0 && (
+            {canViewTables && counts.tableRequestsPending > 0 && (
               <li>
-                <Link href="/admin/cafe" className="underline decoration-pending decoration-2 underline-offset-4">
+                <a href="#table-requests" className="underline decoration-pending decoration-2 underline-offset-4">
                   {counts.tableRequestsPending} table request{counts.tableRequestsPending === 1 ? "" : "s"}
-                </Link>
+                </a>
               </li>
             )}
             {counts.newInquiries > 0 && (
@@ -154,6 +165,36 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
         </h2>
         <RequestQueue requests={pendingRequests} />
       </section>
+
+      {canViewTables && (
+        <section id="table-requests" aria-label="Table reservation requests">
+          <h2 className="font-display text-title mb-5">
+            Table requests awaiting a decision
+            {tableRequests.length > 0 && (
+              <span className="ml-3 bg-pending px-2 py-0.5 text-sm text-charcoal" data-numeric="">
+                {tableRequests.length}
+              </span>
+            )}
+          </h2>
+          {tableRequests.length === 0 ? (
+            <div className="hatch border border-dashed border-charcoal-line p-8 text-center">
+              <p className="font-display text-title">Nothing waiting</p>
+              <p className="mt-2 text-sm text-grey-400">Every table request has been dealt with.</p>
+            </div>
+          ) : (
+            <ul className="space-y-4">
+              {tableRequests.map((request) => (
+                <TableRequestRow
+                  key={request.id}
+                  request={{ ...request, startsAt: request.startsAt.toISOString() }}
+                  tables={tables}
+                  canDecide={canDecideTables}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {closures.length > 0 && (
         <section aria-label="Closures" className="border border-charcoal-line p-5">
