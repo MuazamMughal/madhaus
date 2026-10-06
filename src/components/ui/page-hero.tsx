@@ -14,6 +14,7 @@ export function PageHero({
   lead,
   surface = "dark",
   children,
+  artwork,
 }: {
   eyebrow?: string;
   title: string;
@@ -22,10 +23,12 @@ export function PageHero({
   lead?: string;
   surface?: Surface;
   children?: ReactNode;
+  artwork?: ReactNode;
 }) {
   return (
     <section data-surface={surface} className="surface border-b border-[var(--surface-line)]">
-      <div className="shell py-16 sm:py-24">
+      <div className={`shell py-16 sm:py-24 ${artwork ? "grid items-center gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-8" : ""}`}>
+        <div>
         {eyebrow && (
           <p className="text-eyebrow font-display mb-5 flex items-center gap-3 text-[var(--surface-accent)] uppercase">
             <span aria-hidden="true" className="inline-block h-px w-10 bg-[var(--surface-accent)]" />
@@ -43,6 +46,8 @@ export function PageHero({
         </h1>
         {lead && <p className="text-lead mt-6 max-w-2xl text-[var(--surface-muted)]">{lead}</p>}
         {children && <div className="mt-10">{children}</div>}
+        </div>
+        {artwork}
       </div>
     </section>
   );

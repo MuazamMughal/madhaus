@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { ButtonLink } from "@/components/ui/button";
 import { MediaPanel } from "@/components/ui/media-panel";
 import { PageHero } from "@/components/ui/page-hero";
@@ -36,6 +37,18 @@ export default async function ArenaPage() {
         title="Two courts."
         accent="Open till 3am."
         lead={`One dedicated padel court and one floodlit multipurpose court${hoursLabel ? `, running ${hoursLabel} every night` : ""}. Pick a game and get on it.`}
+        artwork={
+          <div className="relative mx-auto hidden aspect-square w-full max-w-lg lg:block" aria-hidden="true">
+            <Image
+              src="/images/arena/bat-and-padel.webp"
+              alt=""
+              fill
+              preload
+              sizes="(min-width: 1024px) 45vw, 384px"
+              className="object-contain"
+            />
+          </div>
+        }
       >
         <ButtonLink href="/book" size="lg">
           Check availability
